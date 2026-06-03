@@ -2,20 +2,16 @@
 
 Chrome extension for **claude.ai**: **delete chats older than X days** (you choose X; 30 is the default). Runs in your browser only—nothing is sent to us.
 
+
+**[Install Chrome Extension -->](https://activistchecklist.github.io/ai-chat-history-auto-delete/)**
+
 Made by [Activist Checklist](https://activistchecklist.org/).
-
-**Repository:** [github.com/ActivistChecklist/ai-chat-history-auto-delete-extension](https://github.com/ActivistChecklist/ai-chat-history-auto-delete-extension)
-
-## Project website (GitHub Pages)
-
-- **Site:** [activistchecklist.github.io/ai-chat-history-auto-delete](https://activistchecklist.github.io/ai-chat-history-auto-delete/)
-- **Privacy policy (use this URL in the Chrome Web Store):** [activistchecklist.github.io/ai-chat-history-auto-delete/privacy.html](https://activistchecklist.github.io/ai-chat-history-auto-delete/privacy.html)
 
 ## Install Chrome Extension
 
-- **Chrome Web Store:** (LINK HERE)
-- **Marketing / privacy pages:** [Project site](https://activistchecklist.github.io/ai-chat-history-auto-delete/).
-- **From source:** Clone this repo, then follow [Build & packaging](#build--packaging) and load `dist/` via `chrome://extensions` → **Load unpacked**, or install from the zip under `release/`.
+- [Chrome Web Store](https://chromewebstore.google.com/detail/ai-chat-history-auto-dele/ipmoefogkkpbgpbniklknonnmbmcbnpk)
+- Privacy policy: [activistchecklist.github.io/ai-chat-history-auto-delete/privacy.html](https://activistchecklist.github.io/ai-chat-history-auto-delete/privacy.html)
+
 
 ## Features
 
@@ -45,7 +41,7 @@ We do NOT store:
 - **Deleted chat names/titles** — Never stored. The activity log records only how many chats were deleted.
 - **No external transmission** — All storage is local (`chrome.storage.local`). Nothing is sent to us or any third party.
 
-**Privacy policy:** [PRIVACY.md](PRIVACY.md) (source) · [Hosted copy for listings](https://activistchecklist.github.io/ai-chat-history-auto-delete/privacy.html) (after GitHub Pages is enabled)
+**Privacy policy:** [PRIVACY.md](PRIVACY.md) (source) · [Web version](https://activistchecklist.github.io/ai-chat-history-auto-delete/privacy.html)
 
 ## Build & packaging
 
