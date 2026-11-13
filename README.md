@@ -1,16 +1,17 @@
 # AI Chat History Auto-Delete (AI CHAD)
 
-Chrome extension for **claude.ai**: **delete chats older than X days** (you choose X; 30 is the default). Runs in your browser only—nothing is sent to us.
+Chrome and Firefox extension for **claude.ai**: **delete chats older than X days** (you choose X; 30 is the default). Runs in your browser only. Nothing is sent to us.
 
 
-**[Install Chrome Extension -->](https://activistchecklist.github.io/ai-chat-history-auto-delete/)**
+**[Install the extension -->](https://activistchecklist.github.io/ai-chat-history-auto-delete-extension/)**
 
 Made by [Activist Checklist](https://activistchecklist.org/).
 
-## Install Chrome Extension
+## Install
 
-- [Chrome Web Store](https://chromewebstore.google.com/detail/ai-chat-history-auto-dele/ipmoefogkkpbgpbniklknonnmbmcbnpk)
-- Privacy policy: [activistchecklist.github.io/ai-chat-history-auto-delete/privacy.html](https://activistchecklist.github.io/ai-chat-history-auto-delete/privacy.html)
+- **Chrome, Edge, Brave and other Chromium browsers:** [Chrome Web Store](https://chromewebstore.google.com/detail/ai-chat-history-auto-dele/ipmoefogkkpbgpbniklknonnmbmcbnpk)
+- **Firefox 140 or newer (desktop):** [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/ai-chat-history-auto-delete/)
+- Privacy policy: [activistchecklist.github.io/ai-chat-history-auto-delete-extension/privacy.html](https://activistchecklist.github.io/ai-chat-history-auto-delete-extension/privacy.html)
 
 
 ## Features
@@ -39,9 +40,9 @@ We do NOT store:
 
 - **Deleted chat IDs** — Never stored. Used only in memory during the API call to delete, then discarded.
 - **Deleted chat names/titles** — Never stored. The activity log records only how many chats were deleted.
-- **No external transmission** — All storage is local (`chrome.storage.local`). Nothing is sent to us or any third party.
+- **No external transmission** — All storage is local (the browser's `storage.local` extension storage). Nothing is sent to us or any third party.
 
-**Privacy policy:** [PRIVACY.md](PRIVACY.md) (source) · [Web version](https://activistchecklist.github.io/ai-chat-history-auto-delete/privacy.html)
+**Privacy policy:** [PRIVACY.md](PRIVACY.md) (source) · [Web version](https://activistchecklist.github.io/ai-chat-history-auto-delete-extension/privacy.html)
 
 ## Build & packaging
 
@@ -54,17 +55,24 @@ yarn install
 yarn build
 ```
 
-- Runs **Tailwind** (`build:css`) so `src/styles/auto-delete.css` is minified, then copies only listed runtime files into **`dist/`**.
-- Writes **`release/ai-chat-history-auto-delete-<version>.zip`** (version from `manifest.json`). Upload that zip to the Chrome Web Store, or in `chrome://extensions` choose **Load unpacked** and select the **`dist`** folder.
+- Runs **Tailwind** (`build:css`) so `src/styles/auto-delete.css` is minified, then copies only listed runtime files into **`dist/`** (Chrome) and **`dist-firefox/`** (Firefox).
+- Writes **`release/ai-chat-history-auto-delete-<version>.zip`** for the Chrome Web Store and **`release/ai-chat-history-auto-delete-<version>-firefox.zip`** for Firefox Add-ons (version from `manifest.json`).
+
+Both builds ship the same files. Only `manifest.json` differs: the Firefox one is generated from the Chrome one by `scripts/lib/firefox-manifest.mjs`, which swaps the service worker for a background script, uses `options_ui`, and adds the Firefox add-on ID and "collects no data" declaration that addons.mozilla.org (AMO) requires.
+
+To try a build locally:
+
+- **Chrome:** `chrome://extensions` → **Load unpacked** → pick **`dist/`**.
+- **Firefox:** `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** → pick **`dist-firefox/manifest.json`**. It stays until Firefox restarts. `yarn web-ext run --source-dir dist-firefox` does the same in a fresh profile.
 
 Options:
 
-- `yarn build -- --no-zip` — populate `dist/` only.
-- `yarn build -- --skip-css` — skip Tailwind if you already ran `yarn build:css`.
+- `yarn build --target chrome` or `yarn build --target firefox` builds one browser only.
+- `yarn build --no-zip` populates the build folders only.
+- `yarn build --skip-css` skips Tailwind if you already ran `yarn build:css`.
+- `yarn lint:firefox` builds the Firefox folder and runs Mozilla's `web-ext lint` on it, the same checks AMO runs on upload. `yarn release` runs it too.
 
 When you add a new imported module or static asset, add its path to **`ALLOWLISTED_FILES`** in `scripts/build-extension.mjs` or the build will fail on purpose (so nothing is shipped by accident).
-
-Optional: Mozilla’s **`web-ext lint`** can cross-check manifest and common issues (`npx web-ext lint --source-dir=dist`); this project does not depend on it.
 
 ## Versioning & releasing
 
@@ -103,12 +111,12 @@ yarn release
 
 `yarn release` does the whole thing:
 
-1. **Preflight** — clean tree, `gh` authenticated, `op` signed in, and the signing key actually resolves; then lint + tests. Every check runs *before* the version bump, so a misconfiguration can't leave a half-finished release behind.
+1. **Preflight** — clean tree, `gh` authenticated, `op` signed in, and the signing key actually resolves; then lint, tests and the Firefox lint. Every check runs *before* the version bump, so a misconfiguration can't leave a half-finished release behind.
 2. **Bumps** the version from the commits since the last tag, writes `CHANGELOG.md`, commits, and tags.
 3. **Validates** the new version against Chrome's rules (see the caveat below).
-4. **Builds** `release/ai-chat-history-auto-delete-<version>.zip` (plus a signed `.crx` when signing is configured).
-5. **Prompts**, then pushes the current branch + tag (`main` is fine for this project) and creates the GitHub release with both artifacts attached.
-6. Prints the one step it can't do: uploading the zip to the Web Store.
+4. **Builds** the Chrome zip, the signed `.crx`, and the Firefox zip.
+5. **Prompts**, then pushes the current branch + tag (`main` is fine for this project) and creates the GitHub release with the artifacts attached.
+6. Prints what's left: uploading the Chrome zip to the Web Store, and `yarn publish:firefox`.
 
 Flags:
 
@@ -120,6 +128,26 @@ Flags:
 
 Signing is on by default and the release **fails** if the key is missing or unresolvable — shipping unsigned should be a deliberate choice (`--no-sign`), not the side effect of an unset variable.
 
+### Publishing to Firefox Add-ons (AMO)
+
+Run this after `yarn release`, from the tagged release commit:
+
+```bash
+yarn publish:firefox
+```
+
+It rebuilds the Firefox package, lints it, archives the tagged source for AMO's reviewers (they ask for it because the CSS is generated by Tailwind), and submits the version as a listed update with `web-ext sign`. AMO signs it and reviews it; the new version goes live when review passes. `yarn publish:firefox:dry` does everything except the upload.
+
+**One-time setup:**
+
+1. Sign in at [addons.mozilla.org/developers](https://addons.mozilla.org/developers/) and accept the developer agreement.
+2. Create an API key at [Manage API Keys](https://addons.mozilla.org/developers/addon/api/key/). Save the "JWT issuer" and "JWT secret" in 1Password.
+3. Add their secret references to `.env` as `OP_AMO_API_KEY_REF` and `OP_AMO_API_SECRET_REF` (see `.env.example`). Or export `WEB_EXT_API_KEY` and `WEB_EXT_API_SECRET` instead.
+
+The very first submission also has to create the listing, so run it once as `yarn publish:firefox --first`. That sends the summary, description, category and license in [`store/amo-metadata.json`](store/amo-metadata.json). Later updates reuse the listing, so edit it on AMO from then on.
+
+The add-on ID `ai-chat-history-auto-delete@activistchecklist.org` (in `scripts/lib/firefox-manifest.mjs`) is permanent once the add-on is listed. Never change it, or Firefox will treat updates as a different add-on.
+
 ### Chrome versions are not semver
 
 The manifest accepts only **one to four dot-separated integers, each 0–65535** — no prerelease or build metadata. `1.1.0-beta.1` and `1.0.0+build5` are invalid and the Web Store rejects them. So follow semver's *major.minor.patch* shape but never its prerelease syntax; `--prerelease` is deliberately unsupported here.
@@ -130,7 +158,7 @@ To inspect the bump without releasing: `yarn bump:dry`. Its closing hint mention
 
 ## Architecture
 
-- **Background**: Orchestrates flow, uses `chrome.scripting.executeScript` with `world: "MAIN"` to run fetch in page context (inherits your session)
+- **Background**: Orchestrates flow, uses `chrome.scripting.executeScript` with `world: "MAIN"` to run fetch in page context (inherits your session). Chrome runs it as a service worker, Firefox as an event page; the code is the same and uses the `chrome.*` namespace, which Firefox supports with promises in MV3.
 - **Provider interface**: Generic `loadChatsPage` / `deleteChats` so other chat providers can be added behind the same shape
 - **Storage**: `chrome.storage.local` for settings and activity history
 

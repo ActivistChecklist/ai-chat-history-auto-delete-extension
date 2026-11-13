@@ -1,16 +1,21 @@
 /**
- * Production packaging for the Chrome extension (MV3).
+ * Production packaging for the Chrome and Firefox extensions (MV3).
  *
  * Approach (aligned with common extension + security practice):
- * - Allowlist-only copy: only known runtime files go into dist/ (no broad "copy src/").
+ * - Allowlist-only copy: only known runtime files go into the build dir (no broad "copy src/").
  * - Fresh Tailwind build so shipped CSS is minified and matches input.css.
- * - Store-ready .zip with manifest.json at the archive root (Chrome Web Store / "Load unpacked" checks).
+ * - Store-ready .zip with manifest.json at the archive root (Chrome Web Store, AMO, "Load unpacked").
  * - Never copies dev-only trees (tests, discovery, node_modules, Tailwind source, env files, keys).
+ * - Both browsers ship the same files. Only manifest.json differs, derived for Firefox by
+ *   scripts/lib/firefox-manifest.mjs.
  *
  * Usage:
- *   yarn build              # CSS + dist/ + release/*.zip
- *   yarn build -- --no-zip  # dist/ only
- *   yarn build -- --skip-css
+ *   yarn build                     # CSS + dist/ + dist-firefox/ + release/*.zip
+ *   yarn build --target chrome     # dist/ + release/<name>-<version>.zip
+ *   yarn build --target firefox    # dist-firefox/ + release/<name>-<version>-firefox.zip
+ *   yarn build --no-zip            # build dirs only
+ *   yarn build --skip-css
+ *   yarn build --sign              # also sign the Chrome build into a .crx
  */
 
 import fs from 'node:fs';
@@ -21,7 +26,9 @@ import { spawnSync } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import archiver from 'archiver';
 import { assertChromeVersion } from './lib/chrome-version.mjs';
+import { toFirefoxManifest, GECKO_ID } from './lib/firefox-manifest.mjs';
 import { loadEnvFileWithReport } from './lib/env-file.mjs';
+import { readOpSecret } from './lib/op-read.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -34,7 +41,15 @@ for (const c of ENV_CONFLICTS) {
   console.warn(`Warning: ${c.key} differs between your shell and .env; shell value wins.`);
 }
 const DIST = path.join(ROOT, 'dist');
+const DIST_FIREFOX = path.join(ROOT, 'dist-firefox');
 const RELEASE = path.join(ROOT, 'release');
+const PKG_NAME = 'ai-chat-history-auto-delete';
+
+/** Per-browser output. Chrome keeps the original dist/ and zip names. */
+const TARGETS = {
+  chrome: { dist: DIST, zipSuffix: '' },
+  firefox: { dist: DIST_FIREFOX, zipSuffix: '-firefox' }
+};
 
 /** Every file the extension loads at runtime — update when you add modules or static assets. */
 const ALLOWLISTED_FILES = [
@@ -63,10 +78,20 @@ const FORBIDDEN_NAMES = ['.env', '.pem', '.key', 'credentials'];
 
 function parseArgs(argv) {
   const set = new Set(argv);
+  const targetIndex = argv.indexOf('--target');
+  const target = targetIndex === -1 ? 'all' : argv[targetIndex + 1];
+  if (!['all', 'chrome', 'firefox'].includes(target)) {
+    throw new Error('--target must be one of: all, chrome, firefox');
+  }
+  const sign = set.has('--sign');
+  if (sign && target === 'firefox') {
+    throw new Error('--sign only applies to the Chrome build; Firefox builds are signed by AMO');
+  }
   return {
     noZip: set.has('--no-zip'),
     skipCss: set.has('--skip-css'),
-    sign: set.has('--sign')
+    sign,
+    targets: target === 'all' ? ['chrome', 'firefox'] : [target]
   };
 }
 
@@ -102,32 +127,10 @@ function findChrome() {
  *   export OP_SIGNING_KEY_REF="op://Personal/Chrome Extension Signing Key/private key"
  */
 function readKeyFrom1Password() {
-  const ref = process.env.OP_SIGNING_KEY_REF;
-  if (!ref) {
-    throw new Error(
-      'Set OP_SIGNING_KEY_REF in .env to your 1Password secret reference.\n' +
-      '  e.g. OP_SIGNING_KEY_REF="op://<vault>/<item>/private key"'
-    );
-  }
-  // Try OP_ACCOUNT-scoped first when set, then unscoped. Passing --account makes op
-  // resolve the account from its own config file, which is empty when the 1Password
-  // desktop-app integration is providing accounts — so the unscoped form is the one
-  // that works there.
-  const attempts = process.env.OP_ACCOUNT
-    ? [['read', ref, '--account', process.env.OP_ACCOUNT], ['read', ref]]
-    : [['read', ref]];
-  let r;
-  for (const args of attempts) {
-    r = spawnSync('op', args, { encoding: 'utf8' });
-    if (!r.error && r.status === 0) break;
-  }
-  if (r.error) {
-    throw new Error(`1Password CLI (op) not found: ${r.error.message}`);
-  }
-  if (r.status !== 0) {
-    throw new Error(`op read failed (status ${r.status}):\n${r.stderr?.trim()}`);
-  }
-  return r.stdout;
+  return readOpSecret(spawnSync, process.env.OP_SIGNING_KEY_REF, {
+    account: process.env.OP_ACCOUNT || null,
+    envName: 'OP_SIGNING_KEY_REF'
+  });
 }
 
 /**
@@ -180,8 +183,7 @@ async function signExtension(version) {
     }
     console.log('CRX magic bytes verified (Cr24 ✓)');
 
-    const safeVersion = String(version).replace(/[^0-9a-z._-]+/gi, '-');
-    const crxName = `ai-chat-history-auto-delete-${safeVersion}.crx`;
+    const crxName = `${PKG_NAME}-${safeVersionString(version)}.crx`;
     const crxDest = path.join(RELEASE, crxName);
     fs.mkdirSync(RELEASE, { recursive: true });
     if (fs.existsSync(crxDest)) fs.unlinkSync(crxDest);
@@ -211,7 +213,7 @@ function assertSafeSourcePath(absPath, label) {
   }
 }
 
-function copyAllowlistedFile(relPath) {
+function copyAllowlistedFile(relPath, distDir) {
   const src = path.join(ROOT, relPath);
   assertSafeSourcePath(src, relPath);
   if (!fs.existsSync(src)) {
@@ -224,18 +226,18 @@ function copyAllowlistedFile(relPath) {
   if (!stat.isFile()) {
     throw new Error(`Not a regular file: ${relPath}`);
   }
-  const dest = path.join(DIST, relPath);
+  const dest = path.join(distDir, relPath);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.copyFileSync(src, dest);
 }
 
-function copyIcons() {
+function copyIcons(distDir) {
   const iconsDir = path.join(ROOT, 'icons');
   assertSafeSourcePath(iconsDir, 'icons');
   if (!fs.existsSync(iconsDir)) {
     throw new Error('Missing icons/ directory');
   }
-  const destRoot = path.join(DIST, 'icons');
+  const destRoot = path.join(distDir, 'icons');
   fs.mkdirSync(destRoot, { recursive: true });
   for (const name of fs.readdirSync(iconsDir)) {
     if (!name.endsWith('.png')) continue;
@@ -258,7 +260,7 @@ function runTailwindBuild() {
   }
 }
 
-function validateManifest(manifestPath) {
+function validateManifest(manifestPath, target) {
   const raw = fs.readFileSync(manifestPath, 'utf8');
   const m = JSON.parse(raw);
   if (m.manifest_version !== 3) {
@@ -273,12 +275,30 @@ function validateManifest(manifestPath) {
   if (typeof csp === 'string' && csp.includes('unsafe-eval')) {
     throw new Error('Refusing to ship extension_pages CSP containing unsafe-eval');
   }
+  if (target === 'firefox') {
+    if (m.background?.service_worker || !m.background?.scripts?.length) {
+      throw new Error('Firefox manifest must use background.scripts, not a service worker');
+    }
+    if (m.browser_specific_settings?.gecko?.id !== GECKO_ID) {
+      throw new Error(`Firefox manifest must carry the gecko id ${GECKO_ID}`);
+    }
+  }
   return m;
 }
 
-function zipDist(version) {
-  const safeVersion = String(version).replace(/[^0-9a-z._-]+/gi, '-');
-  const zipName = `ai-chat-history-auto-delete-${safeVersion}.zip`;
+/** Rewrites the copied manifest.json in a build dir into its Firefox form. */
+function writeFirefoxManifest(distDir) {
+  const manifestPath = path.join(distDir, 'manifest.json');
+  const chromeManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  fs.writeFileSync(manifestPath, `${JSON.stringify(toFirefoxManifest(chromeManifest), null, 2)}\n`);
+}
+
+function safeVersionString(version) {
+  return String(version).replace(/[^0-9a-z._-]+/gi, '-');
+}
+
+function zipDist(version, distDir, zipSuffix) {
+  const zipName = `${PKG_NAME}-${safeVersionString(version)}${zipSuffix}.zip`;
   const zipPath = path.join(RELEASE, zipName);
   fs.mkdirSync(RELEASE, { recursive: true });
   if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
@@ -292,39 +312,48 @@ function zipDist(version) {
     });
     archive.on('error', reject);
     archive.pipe(output);
-    archive.directory(DIST, false);
+    archive.directory(distDir, false);
     archive.finalize();
   });
 }
 
-async function main() {
-  const { noZip, skipCss, sign } = parseArgs(process.argv.slice(2));
+async function buildTarget(target, { noZip }) {
+  const { dist, zipSuffix } = TARGETS[target];
+  fs.rmSync(dist, { recursive: true, force: true });
+  fs.mkdirSync(dist, { recursive: true });
 
-  fs.rmSync(DIST, { recursive: true, force: true });
-  fs.mkdirSync(DIST, { recursive: true });
+  console.log(`Copying allowlisted extension files (${target})…`);
+  for (const rel of ALLOWLISTED_FILES) {
+    copyAllowlistedFile(rel, dist);
+  }
+  copyIcons(dist);
+  if (target === 'firefox') writeFirefoxManifest(dist);
+
+  const manifest = validateManifest(path.join(dist, 'manifest.json'), target);
+  const loadHint = target === 'firefox'
+    ? 'load it from about:debugging → This Firefox → Load Temporary Add-on, picking manifest.json in'
+    : 'load unpacked from';
+  console.log(`${path.relative(ROOT, dist)}/ ready (${target}): ${loadHint}\n  ${dist}`);
+
+  if (!noZip) {
+    await zipDist(manifest.version, dist, zipSuffix);
+  }
+  return manifest;
+}
+
+async function main() {
+  const { noZip, skipCss, sign, targets } = parseArgs(process.argv.slice(2));
 
   if (!skipCss) {
     console.log('Running Tailwind (minify)…');
     runTailwindBuild();
   }
 
-  console.log('Copying allowlisted extension files…');
-  for (const rel of ALLOWLISTED_FILES) {
-    copyAllowlistedFile(rel);
-  }
-  copyIcons();
-
-  const builtManifest = path.join(DIST, 'manifest.json');
-  const manifest = validateManifest(builtManifest);
-
-  console.log(`dist/ ready — load unpacked from:\n  ${DIST}`);
-
-  if (!noZip) {
-    await zipDist(manifest.version);
-  }
-
-  if (sign) {
-    await signExtension(manifest.version);
+  for (const target of targets) {
+    const manifest = await buildTarget(target, { noZip });
+    if (sign && target === 'chrome') {
+      await signExtension(manifest.version);
+    }
   }
 }
 

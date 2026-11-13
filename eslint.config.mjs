@@ -14,7 +14,7 @@ const lintedFiles = [
 
 export default [
   {
-    ignores: ['node_modules/**', 'icons/**', 'dist/**', 'release/**', 'coverage/**']
+    ignores: ['node_modules/**', 'icons/**', 'dist/**', 'dist-firefox/**', 'web-ext-artifacts/**', 'release/**', 'coverage/**']
   },
   js.configs.recommended,
   {

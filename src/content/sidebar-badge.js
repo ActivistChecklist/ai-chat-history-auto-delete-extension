@@ -712,15 +712,20 @@ if (window.__aichadBadgeLoaded) {
         }
       }
 
-      function isDevMode() {
-        try { return !chrome.runtime.getManifest().update_url; }
-        catch { return false; }
+      /** Asks the background, which can read the install type; content scripts cannot. */
+      async function isDevMode() {
+        try {
+          const res = await chrome.runtime.sendMessage({ type: 'IS_DEV_INSTALL' });
+          return res?.dev === true;
+        } catch {
+          return false;
+        }
       }
 
       /** Dev-only hook driven by scripts/integration-test.js via ?_autodelete_test=. */
-      function checkIntegrationTestParam() {
+      async function checkIntegrationTestParam() {
         const mode = new URLSearchParams(window.location.search).get('_autodelete_test');
-        if (!mode || !isDevMode()) return;
+        if (!mode || !(await isDevMode())) return;
 
         const url = new URL(window.location.href);
         url.searchParams.delete('_autodelete_test');
@@ -780,7 +785,7 @@ if (window.__aichadBadgeLoaded) {
           void refreshState();
         });
 
-        checkIntegrationTestParam();
+        void checkIntegrationTestParam();
       }
 
       init();

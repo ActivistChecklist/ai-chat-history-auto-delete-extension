@@ -2,7 +2,8 @@
  * One-command release.
  *
  * Bumps the version from Conventional Commits, updates the changelog, commits, tags,
- * builds the Web Store zip (and signed CRX), pushes, and publishes a GitHub release.
+ * builds the Chrome Web Store zip (and signed CRX) and the Firefox zip, pushes, and
+ * publishes a GitHub release.
  *
  * Usage:
  *   yarn release                    # full flow (prompts before anything is pushed)
@@ -24,13 +25,14 @@
  *   - op CLI signed in (op signin) and OP_SIGNING_KEY_REF set in .env
  *
  * Steps:
- *   1. Preflight: clean tree, gh authenticated, signing key resolves, lint + tests pass
+ *   1. Preflight: clean tree, gh authenticated, signing key resolves, lint + tests +
+ *      Firefox lint (web-ext) pass
  *   2. Bump version + changelog + commit + tag (commit-and-tag-version)
  *   3. Validate the new version is legal for Chrome (not just legal semver)
- *   4. Build zip (+ signed CRX)
+ *   4. Build Chrome zip (+ signed CRX) and Firefox zip
  *   5. Confirm, then push branch + tag
  *   6. Create the GitHub release with the artifacts and changelog notes
- *   7. Print the remaining manual step (Web Store upload)
+ *   7. Print the remaining steps (Chrome Web Store upload, `yarn publish:firefox`)
  */
 
 import fs from 'node:fs';
@@ -175,6 +177,9 @@ if (SKIP_CHECKS) {
   step('Running lint + tests');
   run('yarn', ['lint'], { evenInDryRun: true });
   run('yarn', ['test'], { evenInDryRun: true });
+  // Builds the Firefox package from the pre-bump tree and runs Mozilla's linter, so an
+  // AMO rejection shows up here instead of after the version is committed.
+  run('yarn', ['lint:firefox'], { evenInDryRun: true });
 }
 
 // ─── 2. Bump + changelog + commit + tag ──────────────────────────────────────
@@ -227,18 +232,21 @@ step('Building release artifacts');
 run('yarn', ['build', ...(willSign ? ['--sign'] : [])], { evenInDryRun: true });
 
 const zipPath = path.join(ROOT, 'release', `${PKG_NAME}-${version}.zip`);
+const firefoxZipPath = path.join(ROOT, 'release', `${PKG_NAME}-${version}-firefox.zip`);
 const crxPath = path.join(ROOT, 'release', `${PKG_NAME}-${version}.crx`);
 const assets = [];
 
 if (!DRY_RUN) {
   if (!fs.existsSync(zipPath)) die(`Expected zip not found: ${zipPath}`);
-  assets.push(zipPath);
+  if (!fs.existsSync(firefoxZipPath)) die(`Expected Firefox zip not found: ${firefoxZipPath}`);
+  assets.push(zipPath, firefoxZipPath);
   if (willSign) {
     if (!fs.existsSync(crxPath)) die(`Expected CRX not found: ${crxPath}`);
     assets.push(crxPath);
   }
   const sizeKb = Math.round(fs.statSync(zipPath).size / 1024);
   console.log(`  zip: ${path.relative(ROOT, zipPath)} (${sizeKb} KB)`);
+  console.log(`  firefox zip: ${path.relative(ROOT, firefoxZipPath)}`);
   if (willSign) console.log(`  crx: ${path.relative(ROOT, crxPath)}`);
 }
 
@@ -296,9 +304,12 @@ if (DRY_RUN) {
   console.log('\n✓ Dry run complete — nothing was committed, pushed, or published.');
 } else {
   console.log(`\n✓ Released ${tag}.`);
-  console.log('\nRemaining manual step — the Web Store has no CLI in this repo:');
-  console.log(`  1. Open https://chrome.google.com/webstore/devconsole`);
-  console.log(`  2. Upload  ${path.relative(ROOT, zipPath)}`);
-  console.log(`  3. Submit for review`);
+  console.log('\nRemaining steps:');
+  console.log('  Chrome Web Store (no CLI in this repo):');
+  console.log(`    1. Open https://chrome.google.com/webstore/devconsole`);
+  console.log(`    2. Upload  ${path.relative(ROOT, zipPath)}`);
+  console.log(`    3. Submit for review`);
+  console.log('  Firefox Add-ons (AMO):');
+  console.log('    yarn publish:firefox   (add --first for the very first submission)');
   console.log(`\nThen merge ${branch} into main (do not commit to main directly).`);
 }

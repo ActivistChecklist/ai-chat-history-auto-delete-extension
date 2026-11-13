@@ -1,6 +1,6 @@
 # Privacy Policy — Claude Chat Auto-Delete Extension
 
-**Canonical public copy (HTTPS, for store listings):** [activistchecklist.github.io/ai-chat-history-auto-delete/privacy.html](https://activistchecklist.github.io/ai-chat-history-auto-delete/privacy.html)
+**Canonical public copy (HTTPS, for store listings):** [activistchecklist.github.io/ai-chat-history-auto-delete-extension/privacy.html](https://activistchecklist.github.io/ai-chat-history-auto-delete-extension/privacy.html)
 
 **Effective Date:** March 19, 2026
 
@@ -23,7 +23,7 @@ This extension collects **no data whatsoever**. Specifically:
 - No data is sent to us or to any third party
 - Nothing is used to train AI models (because nothing is collected)
 
-Your settings (such as the number of days before deletion) are stored locally in your browser using Chrome's built-in storage. This data never leaves your machine.
+Your settings (such as the number of days before deletion) are stored locally in your browser using its built-in extension storage. This data never leaves your machine.
 
 ## Third parties
 

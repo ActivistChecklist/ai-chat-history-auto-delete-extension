@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Chat History Auto-Delete: keep your Claude chats tidy, privately</title>
   <meta name="description"
-    content="Chrome extension for claude.ai: delete chats older than X days. Pick the number. Runs locally; nothing sent to us." />
+    content="Chrome and Firefox extension for claude.ai: delete chats older than X days. Pick the number. Runs locally; nothing sent to us." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -71,7 +71,7 @@
             <em class="not-italic text-clay">Automatically delete</em> your Claude chat history.
           </h1>
           <p class="mt-6 text-lg leading-relaxed text-ink/75">
-            Keeping your old AI chats around is a risk. Most peopple never look at them. They can present legal risk and
+            Keeping your old AI chats around is a risk. Most people never look at them. They can present legal risk and
             could be found by hackers.
             This extension automatically deletes them for you on a schedule.
           </p>
@@ -87,6 +87,14 @@
               </svg>
               <span id="store-cta-label">Add to Chrome</span>
             </a>
+            <p class="mt-4 text-sm text-ink/70">
+              Get it from the
+              <a href="https://chromewebstore.google.com/detail/ai-chat-history-auto-dele/ipmoefogkkpbgpbniklknonnmbmcbnpk"
+                class="font-medium text-moss underline decoration-mist underline-offset-2 hover:text-clay">Chrome Web Store</a>
+              or
+              <a href="https://addons.mozilla.org/firefox/addon/ai-chat-history-auto-delete/"
+                class="font-medium text-moss underline decoration-mist underline-offset-2 hover:text-clay">Firefox Add-ons</a>.
+            </p>
           </div>
         </div>
         <div class="relative">
@@ -95,9 +103,8 @@
             <ul class="mt-6 space-y-4 text-sm leading-relaxed text-ink/80">
               <li class="flex gap-3">
                 <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-clay" aria-hidden="true"></span>
-                <span>Your settings and “how many deleted last time” sit in <code
-                    class="rounded bg-mist/80 px-1.5 py-0.5 text-xs">chrome.storage.local</code> on this machine
-                  only.</span>
+                <span>Your settings and “how many deleted last time” sit in your browser’s local extension
+                  storage on this machine only.</span>
               </li>
               <li class="flex gap-3">
                 <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-clay" aria-hidden="true"></span>

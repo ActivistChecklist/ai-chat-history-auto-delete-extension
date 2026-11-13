@@ -47,6 +47,23 @@ function log(...args) {
   if (DEBUG) console.log('[AutoDelete]', ...args);
 }
 
+/**
+ * True only for an unpacked (Chrome) or temporary (Firefox) install.
+ *
+ * Store builds must never run the integration test: it deletes a real chat and a claude.ai
+ * URL can trigger it. "The manifest has no update_url" holds for Chrome Web Store installs
+ * but not for AMO, which never adds update_url, so ask the browser for the install type.
+ * management.getSelf needs no permission in Chrome or Firefox.
+ */
+async function isDevInstall() {
+  try {
+    const self = await chrome.management.getSelf();
+    return self?.installType === 'development';
+  } catch {
+    return false;
+  }
+}
+
 async function fetchInPageContext(tabId, url, options) {
   const results = await chrome.scripting.executeScript({
     target: { tabId },
@@ -403,11 +420,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'IS_DEV_INSTALL') {
+    isDevInstall().then((dev) => sendResponse({ dev: DEBUG && dev }));
+    return true;
+  }
+
   if (msg.type === 'INTEGRATION_TEST') {
-    if (!DEBUG || chrome.runtime.getManifest().update_url) {
-      return sendResponse({ error: 'Integration tests are only available in dev mode' });
-    }
     (async () => {
+      if (!DEBUG || !(await isDevInstall())) {
+        return { error: 'Integration tests are only available in dev mode' };
+      }
       try {
         const tabId = await ensureClaudeTab({ autoOpen: true });
         const fetchOptsBuilder = claudeProvider.buildFetchOptions;

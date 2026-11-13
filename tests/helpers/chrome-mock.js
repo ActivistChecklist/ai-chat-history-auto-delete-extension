@@ -72,6 +72,10 @@ globalThis.chrome = {
   },
   notifications: {
     create: vi.fn()
+  },
+  management: {
+    // Unpacked / temporary install by default so dev-only paths are testable.
+    getSelf: vi.fn(async () => ({ installType: 'development' }))
   }
 };
 

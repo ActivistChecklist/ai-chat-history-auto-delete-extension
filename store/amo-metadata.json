@@ -1,0 +1,18 @@
+{
+  "slug": "ai-chat-history-auto-delete",
+  "categories": {
+    "firefox": ["privacy-security"]
+  },
+  "summary": {
+    "en-US": "Automatically deletes your Claude chats once they are older than a number of days you pick (30 by default). Runs only in your browser. Nothing is sent to us or anyone else."
+  },
+  "description": {
+    "en-US": "Old AI chats pile up. Most people never look at them again, and they can be a legal risk or get exposed in a hack. This extension deletes your claude.ai chats once they pass an age you choose.\n\n- Pick how old a chat has to be before it is deleted (30 days by default).\n- Run it by hand, or daily, weekly or monthly.\n- Starred chats are skipped unless you turn that off.\n- It keeps no record of what it deleted, only how many.\n\nIt works through your normal signed-in claude.ai tab, so keep one open when you want it to run. Your settings stay in your browser. Nothing is sent to us or any third party.\n\nMade by Activist Checklist. Unofficial and not affiliated with Anthropic."
+  },
+  "homepage": {
+    "en-US": "https://activistchecklist.github.io/ai-chat-history-auto-delete-extension/"
+  },
+  "version": {
+    "license": "GPL-3.0-only"
+  }
+}

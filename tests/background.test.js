@@ -157,6 +157,26 @@ describe('message handler - DEBUG_CHAT_DATES', () => {
 });
 
 describe('message handler - INTEGRATION_TEST', () => {
+  it('refuses on a store install even when the manifest has no update_url', async () => {
+    // AMO installs never carry update_url, so that check alone would let a claude.ai link
+    // delete a real chat on Firefox. The install type is what must decide.
+    chrome.runtime.getManifest.mockReturnValue({ name: 'x', version: '1.0.0' });
+    chrome.management.getSelf.mockResolvedValueOnce({ installType: 'normal' });
+    const sendResponse = vi.fn();
+    messageHandler({ type: 'INTEGRATION_TEST', dryRun: false }, {}, sendResponse);
+    await vi.waitFor(() => expect(sendResponse).toHaveBeenCalled());
+    expect(sendResponse.mock.calls[0][0].error).toMatch(/only available in dev mode/i);
+    expect(chrome.scripting.executeScript).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the install type cannot be read', async () => {
+    chrome.management.getSelf.mockRejectedValueOnce(new Error('unavailable'));
+    const sendResponse = vi.fn();
+    messageHandler({ type: 'INTEGRATION_TEST', dryRun: true }, {}, sendResponse);
+    await vi.waitFor(() => expect(sendResponse).toHaveBeenCalled());
+    expect(sendResponse.mock.calls[0][0].error).toMatch(/only available in dev mode/i);
+  });
+
   it('dry run returns oldest chat without deleting', async () => {
     chrome.tabs.query.mockResolvedValue([{ id: 1 }]);
     const chats = [
@@ -204,6 +224,21 @@ describe('message handler - INTEGRATION_TEST', () => {
     );
     const response = sendResponse.mock.calls[0][0];
     expect(response.error).toMatch(/No chats found/i);
+  });
+});
+
+describe('message handler - IS_DEV_INSTALL', () => {
+  it('reports a development install', async () => {
+    const sendResponse = vi.fn();
+    expect(messageHandler({ type: 'IS_DEV_INSTALL' }, {}, sendResponse)).toBe(true);
+    await vi.waitFor(() => expect(sendResponse).toHaveBeenCalledWith({ dev: true }));
+  });
+
+  it('reports a store install as not dev', async () => {
+    chrome.management.getSelf.mockResolvedValueOnce({ installType: 'normal' });
+    const sendResponse = vi.fn();
+    messageHandler({ type: 'IS_DEV_INSTALL' }, {}, sendResponse);
+    await vi.waitFor(() => expect(sendResponse).toHaveBeenCalledWith({ dev: false }));
   });
 });
 
