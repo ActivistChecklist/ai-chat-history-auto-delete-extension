@@ -85,6 +85,20 @@ describe('describeGoogleError', () => {
       .toBe('PERMISSION_DENIED: No access');
   });
 
+  it('keeps the API error details, which say why a package was rejected', () => {
+    const text = JSON.stringify({
+      error: {
+        code: 400,
+        status: 'INVALID_ARGUMENT',
+        message: 'The uploaded package was invalid.',
+        details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'PKG_INVALID_VERSION' }]
+      }
+    });
+    const described = describeGoogleError(text);
+    expect(described).toMatch(/^INVALID_ARGUMENT: The uploaded package was invalid\./);
+    expect(described).toMatch(/details:[\s\S]*PKG_INVALID_VERSION/);
+  });
+
   it('falls back to the raw text', () => {
     expect(describeGoogleError('Bad Gateway')).toBe('Bad Gateway');
   });

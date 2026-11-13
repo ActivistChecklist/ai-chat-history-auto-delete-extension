@@ -48,14 +48,23 @@ export function buildServiceAccountJwt({ clientEmail, privateKey }, nowSeconds) 
   return `${unsigned}.${signature}`;
 }
 
-/** Google's two error shapes: the token endpoint's and the API's. */
+/**
+ * Google's two error shapes: the token endpoint's and the API's. The API's `details`
+ * carry the actual reason (for example why a package was rejected), so they are kept.
+ */
 export function describeGoogleError(text) {
   try {
     const body = JSON.parse(text);
     if (typeof body.error === 'string') {
       return [body.error, body.error_description].filter(Boolean).join(': ');
     }
-    if (body.error) return [body.error.status, body.error.message].filter(Boolean).join(': ');
+    if (body.error) {
+      const summary = [body.error.status, body.error.message].filter(Boolean).join(': ');
+      const details = body.error.details?.length
+        ? `\n  details: ${JSON.stringify(body.error.details, null, 2).replace(/\n/g, '\n  ')}`
+        : '';
+      return summary + details;
+    }
   } catch { /* not JSON; fall through to the raw text */ }
   return String(text ?? '').trim().slice(0, 500);
 }
