@@ -16,7 +16,8 @@ Only the **prefix** is enforced. Subject prose is not policed — this repo's st
 sentence-case (`feat: Add conventional commits`), which is fine; only ALL-CAPS subjects
 are rejected. Merge, revert, `fixup!` and `squash!` commits are exempt.
 
-- `yarn release:dry` — always run this first; it changes nothing.
+- `yarn release:dry` — always run this first; it changes nothing and reads nothing from
+  1Password.
 - `yarn release` — bump, changelog, commit, tag, build, push, GitHub release.
 - `yarn publish:chrome` and `yarn publish:firefox` then submit the tagged build to each
   store. Both read API credentials from 1Password; `:dry` variants read nothing.

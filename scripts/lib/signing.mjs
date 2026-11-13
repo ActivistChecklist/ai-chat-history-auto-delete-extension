@@ -42,11 +42,12 @@ export function parseAccounts(json) {
     .filter((r) => r.account);
 }
 
-/** @returns {{ok: true, ref: string} | {ok: false, title: string, steps: string[]}} */
-export function diagnoseSigning(ref, runners, opts = {}) {
-  const { platform = process.platform, hasDesktopApp = false, account = null } = opts;
-  const isMac = platform === 'darwin';
-
+/**
+ * The checks that need no 1Password call: the reference is set and looks like one.
+ * A dry run uses only these, so it never prompts for or reads the key.
+ * @returns {null | {ok: false, title: string, steps: string[]}}
+ */
+export function signingRefProblem(ref) {
   if (!ref) {
     return {
       ok: false,
@@ -70,6 +71,17 @@ export function diagnoseSigning(ref, runners, opts = {}) {
       ]
     };
   }
+
+  return null;
+}
+
+/** @returns {{ok: true, ref: string} | {ok: false, title: string, steps: string[]}} */
+export function diagnoseSigning(ref, runners, opts = {}) {
+  const { platform = process.platform, hasDesktopApp = false, account = null } = opts;
+  const isMac = platform === 'darwin';
+
+  const refProblem = signingRefProblem(ref);
+  if (refProblem) return refProblem;
 
   const version = runners.version();
   if (version.status !== 0) {

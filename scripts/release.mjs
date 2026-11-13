@@ -7,7 +7,7 @@
  *
  * Usage:
  *   yarn release                    # full flow (prompts before anything is pushed)
- *   yarn release --dry-run          # print every step, change nothing
+ *   yarn release --dry-run          # print every step, change nothing, read no secrets
  *   yarn release --release-as minor # override the bump the commits imply
  *   yarn release --first-release    # tag the CURRENT version as a baseline, no bump
  *   yarn release --yes              # skip the confirmation prompt
@@ -42,7 +42,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { assertChromeVersion } from './lib/chrome-version.mjs';
-import { diagnoseSigning, makeOpRunners, formatSigningFailure } from './lib/signing.mjs';
+import { diagnoseSigning, signingRefProblem, makeOpRunners, formatSigningFailure } from './lib/signing.mjs';
 import { loadEnvFileWithReport, formatEnvConflict } from './lib/env-file.mjs';
 import { releaseFileNames } from './lib/release-files.mjs';
 
@@ -152,6 +152,14 @@ if (ghAuth.status !== 0) {
 const willSign = !NO_SIGN;
 if (!willSign) {
   console.log('  ⚠ signing disabled via --no-sign (zip only, no CRX)');
+} else if (DRY_RUN) {
+  // A dry run reads nothing from 1Password: only the reference itself is checked.
+  const refProblem = signingRefProblem(process.env.OP_SIGNING_KEY_REF);
+  if (refProblem) {
+    console.log(`  ⚠ ${formatSigningFailure(refProblem).split('\n').join('\n  ')}`);
+  } else {
+    console.log('  signing: OP_SIGNING_KEY_REF is set (not read in a dry run)');
+  }
 } else {
   // Everything here runs BEFORE the version bump so a misconfigured key never leaves a
   // dangling bump commit behind.
@@ -229,7 +237,9 @@ console.log(`  package.json and manifest.json agree (${pkgVersion})`);
 // ─── 4. Build artifacts ──────────────────────────────────────────────────────
 
 step('Building release artifacts');
-run('yarn', ['build', ...(willSign ? ['--sign'] : [])], { evenInDryRun: true });
+// Signing reads the key from 1Password, so a dry run builds without it.
+run('yarn', ['build', ...(willSign && !DRY_RUN ? ['--sign'] : [])], { evenInDryRun: true });
+if (willSign && DRY_RUN) console.log('  [dry-run] would sign the Chrome build into a CRX');
 
 const releaseFiles = releaseFileNames(version);
 const zipPath = path.join(ROOT, 'release', releaseFiles.chromeZip);

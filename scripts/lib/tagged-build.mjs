@@ -8,6 +8,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 /** Every file under `dir`, as forward-slash paths relative to it, sorted. */
 export function listFiles(dir) {
@@ -34,4 +35,17 @@ export function filesChangedSinceTag(files, readBuilt, readTagged) {
     const tagged = readTagged(p);
     return !tagged || !tagged.equals(readBuilt(p));
   });
+}
+
+/**
+ * For a manifest the build generates (Firefox's) rather than copies: whether the built
+ * one matches what generating from the tag's manifest gives. Compared as data, so
+ * formatting does not matter.
+ * @param {string} builtText
+ * @param {string|null} taggedText the tag's manifest.json, or null if it has none
+ * @param {(manifest: object) => object} derive
+ */
+export function derivedManifestMatches(builtText, taggedText, derive) {
+  if (taggedText == null) return false;
+  return isDeepStrictEqual(JSON.parse(builtText), derive(JSON.parse(taggedText)));
 }

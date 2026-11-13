@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { diagnoseSigning, formatSigningFailure, parseAccounts } from '../../scripts/lib/signing.mjs';
+import { diagnoseSigning, signingRefProblem, formatSigningFailure, parseAccounts } from '../../scripts/lib/signing.mjs';
 
 const ok = (out = '') => ({ status: 0, out, err: '' });
 const fail = (err = 'boom') => ({ status: 1, out: '', err });
@@ -262,5 +262,16 @@ describe('diagnoseSigning with several accounts', () => {
       account: 'team.1password.com'
     });
     expect(d.ok).toBe(true);
+  });
+});
+
+describe('signingRefProblem', () => {
+  it('accepts a 1Password reference without running op', () => {
+    expect(signingRefProblem(REF)).toBeNull();
+  });
+
+  it('flags a missing or malformed reference', () => {
+    expect(signingRefProblem(undefined).title).toMatch(/not set/);
+    expect(signingRefProblem('/tmp/key.pem').title).toMatch(/op:\/\//);
   });
 });

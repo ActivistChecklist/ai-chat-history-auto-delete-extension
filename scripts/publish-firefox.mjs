@@ -8,8 +8,11 @@
  *                                   # store/amo-metadata.json
  *   yarn publish:firefox --dry-run  # build, lint and print what would be uploaded; sends nothing
  *
- * Run it after `yarn release`, from the release commit. AMO reviewers get the exact source
- * of that tag, so HEAD must be tagged v<manifest version> and the tree must be clean.
+ * Run it after `yarn release`. AMO must get exactly the tagged release, so the tag
+ * v<manifest version> must exist and every file in the built package must match it (the
+ * generated manifest.json is compared with the one generated from the tag's manifest).
+ * AMO reviewers get the source archived from the tag itself. Commits after the release
+ * that only touch tooling or docs are fine.
  *
  * Credentials are an AMO API key ("JWT issuer") and secret from
  * https://addons.mozilla.org/developers/addon/api/key/. Either export WEB_EXT_API_KEY and
@@ -27,6 +30,8 @@ import { spawnSync } from 'node:child_process';
 import { loadEnvFileWithReport, formatEnvConflict } from './lib/env-file.mjs';
 import { readOpSecret } from './lib/op-read.mjs';
 import { releaseFileNames } from './lib/release-files.mjs';
+import { toFirefoxManifest } from './lib/firefox-manifest.mjs';
+import { listFiles, filesChangedSinceTag, derivedManifestMatches } from './lib/tagged-build.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -59,6 +64,34 @@ function run(cmd, args, opts = {}) {
 function capture(cmd, args) {
   const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8' });
   return { out: (r.stdout || '').trim(), status: r.status };
+}
+
+/** A file's bytes at a git revision, or null when it has no such file. */
+function readAtRevision(rev, file) {
+  const r = spawnSync('git', ['show', `${rev}:${file}`], { cwd: ROOT, maxBuffer: 64 * 1024 * 1024 });
+  return r.status === 0 ? r.stdout : null;
+}
+
+/** In a dry run a problem is reported and the run continues; otherwise it stops. */
+function problem(msg) {
+  if (!DRY_RUN) die(msg);
+  console.log(`  ⚠ ${msg} (allowed in dry-run)`);
+}
+
+/** Paths in dist-firefox/ that differ from the tag. */
+function filesChangedFromTag(tag) {
+  const files = listFiles(DIST_FIREFOX);
+  const changed = filesChangedSinceTag(
+    files.filter((p) => p !== 'manifest.json'),
+    (p) => fs.readFileSync(path.join(DIST_FIREFOX, p)),
+    (p) => readAtRevision(tag, p)
+  );
+  const builtManifest = fs.readFileSync(path.join(DIST_FIREFOX, 'manifest.json'), 'utf8');
+  const taggedManifest = readAtRevision(tag, 'manifest.json')?.toString('utf8') ?? null;
+  if (!derivedManifestMatches(builtManifest, taggedManifest, toFirefoxManifest)) {
+    changed.unshift('manifest.json');
+  }
+  return { files, changed };
 }
 
 /** Env vars win; otherwise read both values from 1Password at the last moment. */
@@ -94,16 +127,8 @@ const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'ut
 const tag = `v${version}`;
 console.log(`  version: ${version}`);
 
-const problems = [];
-if (capture('git', ['status', '--porcelain']).out) {
-  problems.push('Working tree is not clean; the uploaded source would not match the build.');
-}
-const headTags = capture('git', ['tag', '--points-at', 'HEAD']).out.split('\n').filter(Boolean);
-if (!headTags.includes(tag)) {
-  problems.push(`HEAD is not tagged ${tag}. Run \`yarn release\` first, then publish from that commit.`);
-}
-if (problems.length && !DRY_RUN) die(problems.join('\n  '));
-for (const p of problems) console.log(`  ⚠ ${p} (allowed in dry-run)`);
+const tagExists = capture('git', ['rev-parse', '-q', '--verify', `refs/tags/${tag}`]).status === 0;
+if (!tagExists) problem(`There is no tag ${tag}. Run \`yarn release\` first.`);
 
 const credentials = resolveCredentials();
 console.log(`  credentials: ${credentials.source}`);
@@ -114,16 +139,29 @@ console.log(`  listing metadata: ${FIRST ? path.relative(ROOT, METADATA) : 'not 
 step('Building the Firefox package');
 run('node', ['scripts/build-extension.mjs', '--target', 'firefox']);
 
+if (tagExists) {
+  const { files, changed } = filesChangedFromTag(tag);
+  if (changed.length) {
+    problem(
+      `The package differs from ${tag} in:\n    ${changed.join('\n    ')}\n` +
+      '  Release those changes first, so AMO gets a tagged build.'
+    );
+  } else {
+    console.log(`  all ${files.length} files match ${tag}`);
+  }
+}
+
 step('Linting with web-ext');
 run('yarn', ['-s', 'web-ext', 'lint', '--source-dir', DIST_FIREFOX]);
 
 // AMO asks for human-readable source when a package holds generated files (here, the
-// minified Tailwind CSS). The tagged commit is exactly that.
+// minified Tailwind CSS). The tagged commit is exactly that, whatever came after it.
 step('Archiving source for AMO reviewers');
 const sourceZip = path.join(RELEASE, releaseFileNames(version).firefoxSource);
 fs.mkdirSync(RELEASE, { recursive: true });
-run('git', ['archive', '--format=zip', '-o', sourceZip, 'HEAD']);
-console.log(`  ${path.relative(ROOT, sourceZip)}`);
+const sourceRev = tagExists ? tag : 'HEAD';
+run('git', ['archive', '--format=zip', '-o', sourceZip, sourceRev]);
+console.log(`  ${path.relative(ROOT, sourceZip)} (from ${sourceRev})`);
 
 // ─── Submit ──────────────────────────────────────────────────────────────────
 
