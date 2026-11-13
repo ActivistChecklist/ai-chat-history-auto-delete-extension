@@ -7,6 +7,10 @@
     { "filename": "manifest.json", "type": "json" }
   ],
   "tagPrefix": "v",
+  "commitUrlFormat": "https://github.com/ActivistChecklist/ai-chat-history-auto-delete-extension/commit/{{hash}}",
+  "compareUrlFormat": "https://github.com/ActivistChecklist/ai-chat-history-auto-delete-extension/compare/{{previousTag}}...{{currentTag}}",
+  "issueUrlFormat": "https://github.com/ActivistChecklist/ai-chat-history-auto-delete-extension/issues/{{id}}",
+  "userUrlFormat": "https://github.com/{{user}}",
   "types": [
     { "type": "feat", "section": "Features" },
     { "type": "fix", "section": "Bug Fixes" },

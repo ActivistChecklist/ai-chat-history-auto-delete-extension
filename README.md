@@ -87,6 +87,8 @@ Versions are derived from **[Conventional Commits](https://www.conventionalcommi
 
 A **`commit-msg` hook runs commitlint**, so non-conforming messages are rejected at commit time. `manifest.json` is the source of truth for the version; `package.json` is kept in sync automatically.
 
+Changelog and release-note links are hard-coded to github.com in `.versionrc.json`. Left to its defaults, the changelog tool builds them from the git remote, whose SSH host alias (`github.com-ac`) would end up in every link.
+
 ### One-time setup
 
 CRX signing is **required** for a release, so point the build at your 1Password signing key:
