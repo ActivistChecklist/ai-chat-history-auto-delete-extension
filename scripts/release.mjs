@@ -304,12 +304,7 @@ if (DRY_RUN) {
   console.log('\n✓ Dry run complete — nothing was committed, pushed, or published.');
 } else {
   console.log(`\n✓ Released ${tag}.`);
-  console.log('\nRemaining steps:');
-  console.log('  Chrome Web Store (no CLI in this repo):');
-  console.log(`    1. Open https://chrome.google.com/webstore/devconsole`);
-  console.log(`    2. Upload  ${path.relative(ROOT, zipPath)}`);
-  console.log(`    3. Submit for review`);
-  console.log('  Firefox Add-ons (AMO):');
-  console.log('    yarn publish:firefox   (add --first for the very first submission)');
-  console.log(`\nThen merge ${branch} into main (do not commit to main directly).`);
+  console.log('\nRemaining steps (run from this commit):');
+  console.log('  Chrome Web Store:       yarn publish:chrome');
+  console.log('  Firefox Add-ons (AMO):  yarn publish:firefox');
 }

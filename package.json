@@ -19,6 +19,8 @@
     "release:dry": "node scripts/release.mjs --dry-run",
     "publish:firefox": "node scripts/publish-firefox.mjs",
     "publish:firefox:dry": "node scripts/publish-firefox.mjs --dry-run",
+    "publish:chrome": "node scripts/publish-chrome.mjs",
+    "publish:chrome:dry": "node scripts/publish-chrome.mjs --dry-run",
     "bump": "commit-and-tag-version",
     "bump:dry": "commit-and-tag-version --dry-run"
   },

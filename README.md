@@ -118,7 +118,7 @@ yarn release
 3. **Validates** the new version against Chrome's rules (see the caveat below).
 4. **Builds** the Chrome zip, the signed `.crx`, and the Firefox zip.
 5. **Prompts**, then pushes the current branch + tag (`main` is fine for this project) and creates the GitHub release with the artifacts attached.
-6. Prints what's left: uploading the Chrome zip to the Web Store, and `yarn publish:firefox`.
+6. Prints what's left: `yarn publish:chrome` and `yarn publish:firefox`.
 
 Flags:
 
@@ -129,6 +129,26 @@ Flags:
 - `yarn release --yes` — skip the confirmation prompt.
 
 Signing is on by default and the release **fails** if the key is missing or unresolvable — shipping unsigned should be a deliberate choice (`--no-sign`), not the side effect of an unset variable.
+
+### Publishing to the Chrome Web Store
+
+Run this after `yarn release`, from the tagged release commit:
+
+```bash
+yarn publish:chrome
+```
+
+It rebuilds the Chrome zip, uploads it with the [Chrome Web Store API](https://developer.chrome.com/docs/webstore/using-api), and submits it for review. The new version goes live when review passes. It refuses a version the store already has. `yarn publish:chrome:dry` does everything except reading the key and uploading, and `yarn publish:chrome --status` shows what the store has published and in review.
+
+The API only updates the existing listing. Edit the listing text, screenshots and privacy answers in the [Developer Dashboard](https://chrome.google.com/webstore/devconsole).
+
+**One-time setup:**
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), pick or create a project and enable the **Chrome Web Store API**.
+2. [Create a service account](https://console.cloud.google.com/iam-admin/serviceaccounts) in that project. It needs no roles. Then create a JSON key for it.
+3. In the Developer Dashboard, add the service account's email to your publisher, in the Account section. A publisher can have only one service account.
+4. Paste the whole JSON key into one concealed field of a 1Password item, then delete the downloaded file.
+5. In `.env`, set `CWS_PUBLISHER_ID` (from the dashboard's publisher settings) and `OP_CWS_SERVICE_ACCOUNT_REF` (that field's secret reference). See `.env.example`.
 
 ### Publishing to Firefox Add-ons (AMO)
 

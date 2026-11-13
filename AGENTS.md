@@ -18,7 +18,8 @@ are rejected. Merge, revert, `fixup!` and `squash!` commits are exempt.
 
 - `yarn release:dry` — always run this first; it changes nothing.
 - `yarn release` — bump, changelog, commit, tag, build, push, GitHub release.
-- The Chrome Web Store upload is manual; the script prints the remaining steps.
+- `yarn publish:chrome` and `yarn publish:firefox` then submit the tagged build to each
+  store. Both read API credentials from 1Password; `:dry` variants read nothing.
 
 `manifest.json` is the source of truth for the version. `package.json` is kept in sync
 by `.versionrc.json`.
