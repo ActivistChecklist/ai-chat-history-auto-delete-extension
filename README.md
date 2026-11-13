@@ -132,7 +132,7 @@ Signing is on by default and the release **fails** if the key is missing or unre
 
 ### Publishing to the Chrome Web Store
 
-Run this after `yarn release`, from the tagged release commit:
+Run this after `yarn release`. It checks that every file it uploads matches the release tag, so commits after the release that only touch tooling or docs don't get in the way:
 
 ```bash
 yarn publish:chrome

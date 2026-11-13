@@ -6,8 +6,10 @@
  *   yarn publish:chrome --dry-run  # build and print what would be uploaded; sends nothing
  *   yarn publish:chrome --status   # show what the store has published and in review
  *
- * Run it after `yarn release`, from the release commit, so the store gets exactly the
- * tagged build: HEAD must be tagged v<manifest version> and the tree must be clean.
+ * Run it after `yarn release`. The store must get exactly the tagged build, so the tag
+ * v<manifest version> must exist, the tree must be clean, and every file in the built
+ * package must match that tag byte for byte. Later commits that only touch tooling or
+ * docs are fine.
  *
  * The API only updates an existing item. The store listing (text, screenshots, privacy
  * answers) is still edited in the Developer Dashboard.
@@ -31,9 +33,11 @@ import {
   summarizeStatus,
   uploadAndPublish
 } from './lib/chrome-web-store.mjs';
+import { listFiles, filesChangedSinceTag } from './lib/tagged-build.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
+const DIST = path.join(ROOT, 'dist');
 const PKG_NAME = 'ai-chat-history-auto-delete';
 
 /** The listing's ID in the store (its URL ends with it). Fixed for the life of the listing. */
@@ -64,6 +68,12 @@ function run(cmd, args) {
 function capture(cmd, args) {
   const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8' });
   return (r.stdout || '').trim();
+}
+
+/** A file's bytes at a git revision, or null when it has no such file. */
+function readAtRevision(rev, file) {
+  const r = spawnSync('git', ['show', `${rev}:${file}`], { cwd: ROOT, maxBuffer: 64 * 1024 * 1024 });
+  return r.status === 0 ? r.stdout : null;
 }
 
 const SETUP_HELP =
@@ -114,8 +124,9 @@ async function main() {
   if (capture('git', ['status', '--porcelain'])) {
     problems.push('Working tree is not clean; the uploaded package would not match the release.');
   }
-  if (!capture('git', ['tag', '--points-at', 'HEAD']).split('\n').includes(tag)) {
-    problems.push(`HEAD is not tagged ${tag}. Run \`yarn release\` first, then publish from that commit.`);
+  const tagExists = !!capture('git', ['tag', '--list', tag]);
+  if (!tagExists) {
+    problems.push(`There is no tag ${tag}. Run \`yarn release\` first.`);
   }
   const missing = missingConfig();
   if (missing.length) problems.push(`Set ${missing.join(' and ')} in .env.\n${SETUP_HELP}`);
@@ -130,6 +141,23 @@ async function main() {
   const zipPath = path.join(ROOT, 'release', `${PKG_NAME}-${version}.zip`);
   if (!fs.existsSync(zipPath)) die(`Expected zip not found: ${zipPath}`);
   const sizeKb = Math.round(fs.statSync(zipPath).size / 1024);
+
+  if (tagExists) {
+    const built = listFiles(DIST);
+    const changed = filesChangedSinceTag(
+      built,
+      (p) => fs.readFileSync(path.join(DIST, p)),
+      (p) => readAtRevision(tag, p)
+    );
+    if (changed.length) {
+      const msg = `The package differs from ${tag} in:\n    ${changed.join('\n    ')}\n` +
+        '  Release those changes first, so the store gets a tagged build.';
+      if (!DRY_RUN) die(msg);
+      console.log(`  ⚠ ${msg} (allowed in dry-run)`);
+    } else {
+      console.log(`  all ${built.length} files match ${tag}`);
+    }
+  }
 
   // ─── Submit ────────────────────────────────────────────────────────────────
 
