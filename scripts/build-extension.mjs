@@ -63,6 +63,7 @@ const ALLOWLISTED_FILES = [
   'src/onboarding/onboarding.js',
   'src/shared/alarms.js',
   'src/shared/constants.js',
+  'src/shared/dom.js',
   'src/shared/badge-insertion.js',
   'src/shared/modal.css',
   'src/shared/pending-deletion-modal.js',

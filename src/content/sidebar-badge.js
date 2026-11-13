@@ -21,10 +21,12 @@ if (window.__aichadBadgeLoaded) {
   (async () => {
     const [
       { openPendingDeletionModal, closePendingDeletionModal },
-      { BADGE_ID, findBadgeInsertionPoint, isBadgeInPlace, insertBadge }
+      { BADGE_ID, findBadgeInsertionPoint, isBadgeInPlace, insertBadge },
+      { el }
     ] = await Promise.all([
       import(chrome.runtime.getURL('src/shared/pending-deletion-modal.js')),
-      import(chrome.runtime.getURL('src/shared/badge-insertion.js'))
+      import(chrome.runtime.getURL('src/shared/badge-insertion.js')),
+      import(chrome.runtime.getURL('src/shared/dom.js'))
     ]);
 
     (function () {
@@ -64,14 +66,6 @@ if (window.__aichadBadgeLoaded) {
       let snapshot = { last: null, lastDeletion: null, pending: null, progress: null, settings: {} };
 
       // ---------------------------------------------------------------- helpers
-
-      function escapeHtml(str) {
-        return String(str ?? '')
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;');
-      }
 
       /**
        * Claude's theme lives on `.cds-root[data-mode]`. The panel and modals are
@@ -141,11 +135,10 @@ if (window.__aichadBadgeLoaded) {
 
       /**
        * Shows a short-lived message in the panel, and — for errors — on the row itself,
-       * so a failed run is visible without opening anything.
-       * `html` must already be escaped by the caller.
+       * so a failed run is visible without opening anything. `text` is shown as plain text.
        */
-      function setTransientStatus(html, tone = null) {
-        transientStatus = { html, tone };
+      function setTransientStatus(text, tone = null) {
+        transientStatus = { text, tone };
         clearTimeout(transientTimer);
         transientTimer = setTimeout(() => {
           transientStatus = null;
@@ -245,30 +238,35 @@ if (window.__aichadBadgeLoaded) {
         return panelEl;
       }
 
-      function panelBodyHtml() {
+      function panelLine(text, tone = null) {
+        const cls = tone ? `aichad-panel__line aichad-panel__line--${tone}` : 'aichad-panel__line';
+        return el('p', { class: cls }, text);
+      }
+
+      function panelBody() {
         const { last, lastDeletion, pending, progress } = snapshot;
         const lines = [];
-        let approveAction = '';
+        let approveAction = null;
 
         if (transientStatus) {
-          const toneClass = transientStatus.tone ? ` aichad-panel__line--${transientStatus.tone}` : '';
-          lines.push(`<p class="aichad-panel__line${toneClass}">${transientStatus.html}</p>`);
+          lines.push(panelLine(transientStatus.text, transientStatus.tone));
         } else if (progress) {
           const done = progress.deleted ?? progress.current ?? 0;
-          lines.push(
-            `<p class="aichad-panel__line aichad-panel__line--emphasis">Deleting chats — ${escapeHtml(String(done))} of ${escapeHtml(String(progress.total ?? 0))} done</p>`
-          );
+          lines.push(panelLine(`Deleting chats — ${done} of ${progress.total ?? 0} done`, 'emphasis'));
         } else if (isPendingActionable(pending)) {
-          lines.push(
-            `<p class="aichad-panel__line aichad-panel__line--emphasis">${escapeHtml(plural(pending.count, 'chat'))} ready to delete</p>`
-          );
-          approveAction = `<button type="button" class="aichad-panel__action aichad-panel__action--danger" data-aichad-approve>Review &amp; approve</button>`;
+          lines.push(panelLine(`${plural(pending.count, 'chat')} ready to delete`, 'emphasis'));
+          approveAction = el('button', {
+            type: 'button',
+            class: 'aichad-panel__action aichad-panel__action--danger',
+            'data-aichad-approve': true
+          }, 'Review & approve');
         } else {
-          lines.push(
+          lines.push(panelLine(
             lastDeletion?.timestamp
-              ? `<p class="aichad-panel__line aichad-panel__line--emphasis">${escapeHtml(plural(lastDeletion.deleted ?? 0, 'chat'))} deleted ${escapeHtml(formatStamp(lastDeletion.timestamp))}</p>`
-              : `<p class="aichad-panel__line aichad-panel__line--emphasis">No chats deleted yet</p>`
-          );
+              ? `${plural(lastDeletion.deleted ?? 0, 'chat')} deleted ${formatStamp(lastDeletion.timestamp)}`
+              : 'No chats deleted yet',
+            'emphasis'
+          ));
 
           // Only mention the last run when it is a NEWER, empty-handed one. Otherwise it is
           // the same event as the line above, worded differently.
@@ -276,9 +274,7 @@ if (window.__aichadBadgeLoaded) {
             && (last.deleted ?? 0) === 0
             && (!lastDeletion?.timestamp || last.timestamp > lastDeletion.timestamp);
           if (ranSinceWithNothingFound) {
-            lines.push(
-              `<p class="aichad-panel__line">Checked ${escapeHtml(formatStamp(last.timestamp))} — nothing to delete</p>`
-            );
+            lines.push(panelLine(`Checked ${formatStamp(last.timestamp)} — nothing to delete`));
           }
 
           if (pending?.count && pending.snoozedUntil && Date.now() < pending.snoozedUntil) {
@@ -286,27 +282,33 @@ if (window.__aichadBadgeLoaded) {
               hour: 'numeric',
               minute: '2-digit'
             });
-            lines.push(
-              `<p class="aichad-panel__line">${escapeHtml(plural(pending.count, 'chat'))} snoozed until ${escapeHtml(until)}.</p>`
-            );
+            lines.push(panelLine(`${plural(pending.count, 'chat')} snoozed until ${until}.`));
           }
         }
 
         const running = !!progress;
-        return `
-          ${lines.join('')}
-          <div class="aichad-panel__footer">
-            ${approveAction ? `<div class="aichad-panel__row">${approveAction}</div>` : ''}
-            <div class="aichad-panel__row">
-              <button type="button" class="aichad-panel__action" data-aichad-run-now ${running ? 'disabled' : ''}>Run now</button>
-              <button type="button" class="aichad-panel__action aichad-panel__action--muted" data-aichad-settings>Settings</button>
-            </div>
-          </div>`;
+        return [
+          ...lines,
+          el('div', { class: 'aichad-panel__footer' },
+            approveAction && el('div', { class: 'aichad-panel__row' }, approveAction),
+            el('div', { class: 'aichad-panel__row' },
+              el('button', {
+                type: 'button',
+                class: 'aichad-panel__action',
+                'data-aichad-run-now': true,
+                disabled: running
+              }, 'Run now'),
+              el('button', {
+                type: 'button',
+                class: 'aichad-panel__action aichad-panel__action--muted',
+                'data-aichad-settings': true
+              }, 'Settings')))
+        ];
       }
 
       function renderPanelBody() {
         if (!panelEl?.isConnected) return;
-        panelEl.innerHTML = panelBodyHtml();
+        panelEl.replaceChildren(...panelBody());
         panelEl.className = claudeThemeClass();
         panelEl.querySelector('[data-aichad-approve]')?.addEventListener('click', () => {
           closePanel();
@@ -411,7 +413,7 @@ if (window.__aichadBadgeLoaded) {
           afterSnooze: async () => { await refreshState(); },
           afterConfirmSuccess: async () => { await refreshState(); },
           onError: (msg) => {
-            setTransientStatus(escapeHtml(msg), 'error');
+            setTransientStatus(msg, 'error');
             openPanel();
           }
         });
@@ -429,29 +431,43 @@ if (window.__aichadBadgeLoaded) {
           const ignoreStarred = settings.ignoreStarred !== false;
           closeRunNowModal();
 
-          const overlay = document.createElement('div');
-          overlay.id = RUN_NOW_MODAL_ID;
-          overlay.className = `aichad-modal-overlay ${claudeThemeClass()}`.trim();
-          overlay.setAttribute('role', 'dialog');
-          overlay.setAttribute('aria-modal', 'true');
-          overlay.setAttribute('aria-labelledby', 'aichad-run-now-modal-title');
-          overlay.innerHTML = `
-            <div class="aichad-modal">
-              <h2 id="aichad-run-now-modal-title" class="aichad-modal__title">Run cleanup now?</h2>
-              <p class="aichad-modal__body">
-                Chats older than the age below will be considered for deletion for <strong>this run only</strong>.
-                Your saved settings stay the same.${ignoreStarred ? ' Starred chats are skipped.' : ''}
-              </p>
-              <div class="aichad-modal__field">
-                <label for="aichad-run-now-days" class="aichad-modal__label">Delete chats older than (days)</label>
-                <input type="number" id="aichad-run-now-days" class="aichad-modal__input" min="1" max="365" value="${days}" inputmode="numeric" />
-              </div>
-              <p class="aichad-modal__hint">Defaults to your saved threshold (${plural(days, 'day')}); change it for this run only.</p>
-              <div class="aichad-modal__actions">
-                <button type="button" class="aichad-modal__btn aichad-modal__btn--outline" data-aichad-cancel>Cancel</button>
-                <button type="button" class="aichad-modal__btn aichad-modal__btn--primary" data-aichad-confirm>Run now</button>
-              </div>
-            </div>`;
+          const overlay = el('div', {
+            id: RUN_NOW_MODAL_ID,
+            class: `aichad-modal-overlay ${claudeThemeClass()}`.trim(),
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-labelledby': 'aichad-run-now-modal-title'
+          },
+          el('div', { class: 'aichad-modal' },
+            el('h2', { id: 'aichad-run-now-modal-title', class: 'aichad-modal__title' }, 'Run cleanup now?'),
+            el('p', { class: 'aichad-modal__body' },
+              'Chats older than the age below will be considered for deletion for ',
+              el('strong', null, 'this run only'),
+              `. Your saved settings stay the same.${ignoreStarred ? ' Starred chats are skipped.' : ''}`),
+            el('div', { class: 'aichad-modal__field' },
+              el('label', { for: 'aichad-run-now-days', class: 'aichad-modal__label' }, 'Delete chats older than (days)'),
+              el('input', {
+                type: 'number',
+                id: 'aichad-run-now-days',
+                class: 'aichad-modal__input',
+                min: '1',
+                max: '365',
+                value: days,
+                inputmode: 'numeric'
+              })),
+            el('p', { class: 'aichad-modal__hint' },
+              `Defaults to your saved threshold (${plural(days, 'day')}); change it for this run only.`),
+            el('div', { class: 'aichad-modal__actions' },
+              el('button', {
+                type: 'button',
+                class: 'aichad-modal__btn aichad-modal__btn--outline',
+                'data-aichad-cancel': true
+              }, 'Cancel'),
+              el('button', {
+                type: 'button',
+                class: 'aichad-modal__btn aichad-modal__btn--primary',
+                'data-aichad-confirm': true
+              }, 'Run now'))));
           document.body.appendChild(overlay);
 
           const onKey = (e) => {
@@ -497,12 +513,12 @@ if (window.__aichadBadgeLoaded) {
 
         chrome.runtime.sendMessage({ type: 'RUN_NOW', options }, (result) => {
           if (chrome.runtime.lastError) {
-            setTransientStatus(escapeHtml(chrome.runtime.lastError.message), 'error');
+            setTransientStatus(chrome.runtime.lastError.message, 'error');
             void refreshState();
             return;
           }
           if (result?.error) {
-            setTransientStatus(escapeHtml(result.error), 'error');
+            setTransientStatus(result.error, 'error');
             void refreshState();
             return;
           }
@@ -733,23 +749,23 @@ if (window.__aichadBadgeLoaded) {
 
         const dryRun = mode !== 'delete';
         setTransientStatus(
-          escapeHtml(`Integration test: ${dryRun ? 'finding oldest chat…' : 'finding & deleting oldest chat…'}`)
+          `Integration test: ${dryRun ? 'finding oldest chat…' : 'finding & deleting oldest chat…'}`
         );
         openPanel();
 
         chrome.runtime.sendMessage({ type: 'INTEGRATION_TEST', dryRun }, (result) => {
           if (chrome.runtime.lastError) {
-            setTransientStatus(escapeHtml(chrome.runtime.lastError.message), 'error');
+            setTransientStatus(chrome.runtime.lastError.message, 'error');
             return;
           }
           if (result?.error) {
-            setTransientStatus(escapeHtml(result.error), 'error');
+            setTransientStatus(result.error, 'error');
             return;
           }
           const name = result.chat?.name || '(unnamed)';
           const date = result.chat?.createdAt ? new Date(result.chat.createdAt).toLocaleString() : '—';
           const verb = dryRun ? 'Dry run OK — oldest' : 'Deleted';
-          setTransientStatus(`✓ ${verb}: "${escapeHtml(name)}" (${escapeHtml(date)})`, 'ok');
+          setTransientStatus(`✓ ${verb}: "${name}" (${date})`, 'ok');
           openPanel();
         });
       }

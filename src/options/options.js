@@ -4,14 +4,9 @@ import { syncAlarmFromSettings } from '../shared/alarms.js';
 import { mountRunFrequencyFieldset, getSelectedRunFrequency } from '../shared/run-frequency-fieldset.js';
 import { PROVIDER_LIST } from '../providers/registry.js';
 import { openPendingDeletionModal } from '../shared/pending-deletion-modal.js';
+import { el } from '../shared/dom.js';
 
 const AUTOSAVE_DEBOUNCE_MS = 450;
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str ?? '';
-  return div.innerHTML;
-}
 
 let suppressAutosave = false;
 let autosaveDebounceTimer = null;
@@ -54,20 +49,26 @@ async function loadSettings() {
     const enabled = { ...DEFAULT_ENABLED_SITES, ...settings.enabledSites };
     const activeProviders = PROVIDER_LIST.filter((p) => p.disabled !== true);
     const listEl = document.getElementById('sitesList');
-    listEl.innerHTML = PROVIDER_LIST.map((p) => {
+    listEl.replaceChildren(...PROVIDER_LIST.map((p) => {
       const isDisabled = p.disabled === true;
       const checked = !isDisabled && enabled[p.id] !== false;
-      const badge = p.badge ? `<span class="ml-auto px-2 py-0.5 text-xs font-medium rounded-full bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400">${escapeHtml(p.badge)}</span>` : '';
-      return `
-    <div class="flex items-center gap-3 ${isDisabled ? 'opacity-60' : ''}">
-      <input type="checkbox" id="site-${p.id}" data-site="${p.id}"
-        class="w-4 h-4 rounded border-slate-300 dark:border-slate-500 text-teal-500 focus:ring-teal-500 disabled:cursor-not-allowed"
-        ${checked ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}>
-      <label for="site-${p.id}" class="flex-1 text-sm text-slate-700 dark:text-slate-300 ${isDisabled ? 'cursor-not-allowed' : ''}">${escapeHtml(p.displayName)} (${escapeHtml(p.domain)})</label>
-      ${badge}
-    </div>
-  `;
-    }).join('');
+      return el('div', { class: `flex items-center gap-3 ${isDisabled ? 'opacity-60' : ''}` },
+        el('input', {
+          type: 'checkbox',
+          id: `site-${p.id}`,
+          'data-site': p.id,
+          class: 'w-4 h-4 rounded border-slate-300 dark:border-slate-500 text-teal-500 focus:ring-teal-500 disabled:cursor-not-allowed',
+          checked,
+          disabled: isDisabled
+        }),
+        el('label', {
+          for: `site-${p.id}`,
+          class: `flex-1 text-sm text-slate-700 dark:text-slate-300 ${isDisabled ? 'cursor-not-allowed' : ''}`
+        }, `${p.displayName} (${p.domain})`),
+        p.badge && el('span', {
+          class: 'ml-auto px-2 py-0.5 text-xs font-medium rounded-full bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400'
+        }, p.badge));
+    }));
     const sitesSection = document.getElementById('sitesSection');
     if (sitesSection) sitesSection.classList.toggle('hidden', activeProviders.length <= 1);
   } finally {
@@ -181,10 +182,10 @@ function saveNow() {
 }
 
 function setStatus(msg, type = '') {
-  const el = document.getElementById('status');
-  el.textContent = msg;
-  el.className = 'text-sm ' + (type === 'error' ? 'text-rose-600 dark:text-rose-400' : type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : type === 'warn' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400');
-  if (msg) setTimeout(() => { el.textContent = ''; }, 5000);
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = msg;
+  statusEl.className = 'text-sm ' + (type === 'error' ? 'text-rose-600 dark:text-rose-400' : type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : type === 'warn' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400');
+  if (msg) setTimeout(() => { statusEl.textContent = ''; }, 5000);
 }
 
 async function loadHistory() {
@@ -356,38 +357,34 @@ async function runIntegrationTest(dryRun) {
   dryRunBtn.disabled = true;
   runBtn.disabled = true;
   resultEl.classList.remove('hidden');
-  resultEl.innerHTML = `<p class="text-slate-500">${dryRun ? 'Finding oldest chat...' : 'Finding and deleting oldest chat...'}</p>`;
+  const errorLine = (text) => el('p', { class: 'text-rose-600 dark:text-rose-400' }, text);
+  resultEl.replaceChildren(
+    el('p', { class: 'text-slate-500' }, dryRun ? 'Finding oldest chat...' : 'Finding and deleting oldest chat...')
+  );
   try {
     const result = await chrome.runtime.sendMessage({ type: 'INTEGRATION_TEST', dryRun });
     if (result === undefined) {
-      resultEl.innerHTML = '<p class="text-rose-600 dark:text-rose-400">No response — reload extension and ensure claude.ai is open.</p>';
+      resultEl.replaceChildren(errorLine('No response — reload extension and ensure claude.ai is open.'));
       return;
     }
     if (result?.error) {
-      resultEl.innerHTML = `<p class="text-rose-600 dark:text-rose-400">Error: ${escapeHtml(result.error)}</p>`;
+      resultEl.replaceChildren(errorLine(`Error: ${result.error}`));
       return;
     }
     const chat = result.chat;
     const date = chat?.createdAt ? new Date(chat.createdAt).toLocaleString() : '—';
     const name = chat?.name || '(unnamed)';
-    if (dryRun) {
-      resultEl.innerHTML = [
-        '<p class="font-medium text-emerald-700 dark:text-emerald-300">Dry run complete — no chat deleted</p>',
-        `<p><strong>Oldest chat:</strong> ${escapeHtml(name)}</p>`,
-        `<p><strong>Last activity:</strong> ${escapeHtml(date)}</p>`,
-        `<p class="text-xs text-slate-400">ID: ${escapeHtml(chat?.id ?? '—')}</p>`
-      ].join('');
-    } else {
-      resultEl.innerHTML = [
-        `<p class="font-medium text-emerald-700 dark:text-emerald-300">Deleted ${result.deleted ?? 0} chat(s)</p>`,
-        `<p><strong>Chat:</strong> ${escapeHtml(name)}</p>`,
-        `<p><strong>Last activity:</strong> ${escapeHtml(date)}</p>`,
-        `<p class="text-xs text-slate-400">ID: ${escapeHtml(chat?.id ?? '—')}</p>`
-      ].join('');
-      await loadHistory();
-    }
+    const detail = (label, value) => el('p', null, el('strong', null, `${label}:`), ` ${value}`);
+    resultEl.replaceChildren(
+      el('p', { class: 'font-medium text-emerald-700 dark:text-emerald-300' },
+        dryRun ? 'Dry run complete — no chat deleted' : `Deleted ${result.deleted ?? 0} chat(s)`),
+      detail(dryRun ? 'Oldest chat' : 'Chat', name),
+      detail('Last activity', date),
+      el('p', { class: 'text-xs text-slate-400' }, `ID: ${chat?.id ?? '—'}`)
+    );
+    if (!dryRun) await loadHistory();
   } catch (err) {
-    resultEl.innerHTML = `<p class="text-rose-600 dark:text-rose-400">${escapeHtml(err?.message || 'Failed')}</p>`;
+    resultEl.replaceChildren(errorLine(err?.message || 'Failed'));
   } finally {
     dryRunBtn.disabled = false;
     runBtn.disabled = false;
@@ -450,8 +447,8 @@ async function applyPendingOptionsHash() {
   const { [STORAGE_KEYS.OPTIONS_PENDING_HASH]: hash } = await chrome.storage.local.get(STORAGE_KEYS.OPTIONS_PENDING_HASH);
   if (!hash) return;
   await chrome.storage.local.remove(STORAGE_KEYS.OPTIONS_PENDING_HASH);
-  const el = document.getElementById(String(hash));
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const target = document.getElementById(String(hash));
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {

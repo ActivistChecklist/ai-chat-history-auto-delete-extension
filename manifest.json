@@ -50,7 +50,8 @@
       "resources": [
         "src/shared/pending-deletion-modal.js",
         "src/shared/constants.js",
-        "src/shared/badge-insertion.js"
+        "src/shared/badge-insertion.js",
+        "src/shared/dom.js"
       ],
       "matches": [
         "https://claude.ai/*"

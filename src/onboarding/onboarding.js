@@ -2,6 +2,7 @@ import { getSettings, saveSettings, setOnboardingComplete, isOnboardingComplete 
 import { syncAlarmFromSettings } from '../shared/alarms.js';
 import { mountRunFrequencyFieldset, getSelectedRunFrequency } from '../shared/run-frequency-fieldset.js';
 import { STORAGE_KEYS } from '../shared/constants.js';
+import { el } from '../shared/dom.js';
 
 const FREQ = 'onboardFrequency';
 
@@ -20,12 +21,6 @@ function goBackToStep1() {
   sub.textContent = PAGE_SUBTITLE_DEFAULT;
   sub.classList.remove('hidden');
   document.getElementById('step2Back').disabled = false;
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 function showSuccess() {
@@ -117,16 +112,18 @@ async function runPreview() {
     document.getElementById('step2Summary').textContent =
       `${n} chat${n === 1 ? '' : 's'} will be deleted (older than your threshold):`;
     const listEl = document.getElementById('step2List');
-    listEl.innerHTML = result.chats.map((c) => {
+    listEl.replaceChildren(...result.chats.map((c) => {
       const name = c.name || '(unnamed)';
       const display = name.length > 72 ? `${name.slice(0, 69)}…` : name;
       const last =
         typeof c.lastEditAt === 'number' && c.lastEditAt > 0
           ? new Date(c.lastEditAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
           : '';
-      const meta = last ? ` <span class="text-slate-400">· ${escapeHtml(last)}</span>` : '';
-      return `<li title="${escapeHtml(name)}">${escapeHtml(display)}${meta}</li>`;
-    }).join('');
+      return el('li', { title: name },
+        display,
+        last && ' ',
+        last && el('span', { class: 'text-slate-400' }, `· ${last}`));
+    }));
     document.getElementById('step2Preview').classList.remove('hidden');
     return;
   }

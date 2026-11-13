@@ -1,17 +1,10 @@
 import { STORAGE_KEYS } from './constants.js';
+import { domBuilder } from './dom.js';
 
 export const PENDING_MODAL_OVERLAY_ID = 'aichad-pending-chats-modal';
 export const CLAUDE_CHAT_BASE = 'https://claude.ai/chat';
 
 const SNOOZE_MS = 24 * 60 * 60 * 1000;
-
-export function escapeHtmlForPendingModal(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 function formatLastEditedLabel(ms) {
   if (ms == null || !Number.isFinite(ms) || ms <= 0) return '';
@@ -75,35 +68,37 @@ export function openPendingDeletionModal(pend, opts = {}) {
   const onError = opts.onError ?? ((msg) => { alert(msg); });
   const onModalCleanup = opts.onModalCleanup;
 
-  const escapeHtml = escapeHtmlForPendingModal;
+  const el = domBuilder(doc);
   closePendingDeletionModal(doc);
 
   const rows = buildChatRows(pend);
-  const listHtml = rows.length
-    ? rows.map((r) => `
-        <li class="aichad-modal__chat-item">
-          <a href="${CLAUDE_CHAT_BASE}/${encodeURIComponent(r.id)}" target="_blank" rel="noopener noreferrer" class="aichad-modal__chat-link">${escapeHtml(r.name)}</a>
-          ${r.lastEdited ? `<span class="aichad-modal__chat-meta">Last edited ${escapeHtml(r.lastEdited)}</span>` : ''}
-        </li>`).join('')
-    : `<li class="aichad-modal__chat-item aichad-modal__chat-item--empty">No chat links available.</li>`;
+  const listItems = rows.length
+    ? rows.map((r) => el('li', { class: 'aichad-modal__chat-item' },
+      el('a', {
+        href: `${CLAUDE_CHAT_BASE}/${encodeURIComponent(r.id)}`,
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        class: 'aichad-modal__chat-link'
+      }, r.name),
+      r.lastEdited && el('span', { class: 'aichad-modal__chat-meta' }, `Last edited ${r.lastEdited}`)))
+    : el('li', { class: 'aichad-modal__chat-item aichad-modal__chat-item--empty' }, 'No chat links available.');
 
-  const overlay = doc.createElement('div');
-  overlay.id = PENDING_MODAL_OVERLAY_ID;
-  overlay.className = 'aichad-modal-overlay';
-  overlay.setAttribute('role', 'dialog');
-  overlay.setAttribute('aria-modal', 'true');
-  overlay.setAttribute('aria-labelledby', 'aichad-pending-chats-modal-title');
-  overlay.innerHTML = `
-      <div class="aichad-modal aichad-modal--chats">
-        <h2 id="aichad-pending-chats-modal-title" class="aichad-modal__title">Chats ready to delete</h2>
-        <p class="aichad-modal__body">${escapeHtml(String(pend.count ?? 0))} chat${(pend.count ?? 0) === 1 ? '' : 's'} will be permanently removed.</p>
-        <ul class="aichad-modal__chat-list">${listHtml}</ul>
-        <div class="aichad-modal__actions aichad-modal__actions--stack">
-          <button type="button" class="aichad-modal__btn aichad-modal__btn--danger" data-aichad-confirm-delete>Confirm deletion</button>
-          <button type="button" class="aichad-modal__btn aichad-modal__btn--outline" data-aichad-snooze>Snooze for 1 day</button>
-          <button type="button" class="aichad-modal__btn aichad-modal__btn--outline" data-aichad-close>Close</button>
-        </div>
-      </div>`;
+  const count = pend.count ?? 0;
+  const overlay = el('div', {
+    id: PENDING_MODAL_OVERLAY_ID,
+    class: 'aichad-modal-overlay',
+    role: 'dialog',
+    'aria-modal': 'true',
+    'aria-labelledby': 'aichad-pending-chats-modal-title'
+  },
+  el('div', { class: 'aichad-modal aichad-modal--chats' },
+    el('h2', { id: 'aichad-pending-chats-modal-title', class: 'aichad-modal__title' }, 'Chats ready to delete'),
+    el('p', { class: 'aichad-modal__body' }, `${count} chat${count === 1 ? '' : 's'} will be permanently removed.`),
+    el('ul', { class: 'aichad-modal__chat-list' }, listItems),
+    el('div', { class: 'aichad-modal__actions aichad-modal__actions--stack' },
+      el('button', { type: 'button', class: 'aichad-modal__btn aichad-modal__btn--danger', 'data-aichad-confirm-delete': true }, 'Confirm deletion'),
+      el('button', { type: 'button', class: 'aichad-modal__btn aichad-modal__btn--outline', 'data-aichad-snooze': true }, 'Snooze for 1 day'),
+      el('button', { type: 'button', class: 'aichad-modal__btn aichad-modal__btn--outline', 'data-aichad-close': true }, 'Close'))));
   doc.body.appendChild(overlay);
 
   const detachKey = () => {
