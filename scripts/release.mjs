@@ -44,10 +44,10 @@ import { spawnSync } from 'node:child_process';
 import { assertChromeVersion } from './lib/chrome-version.mjs';
 import { diagnoseSigning, makeOpRunners, formatSigningFailure } from './lib/signing.mjs';
 import { loadEnvFileWithReport, formatEnvConflict } from './lib/env-file.mjs';
+import { releaseFileNames } from './lib/release-files.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const PKG_NAME = 'ai-chat-history-auto-delete';
 
 // Pick up OP_SIGNING_KEY_REF (and anything else) from .env so it does not have to live
 // in a shell profile. Real environment variables still win — and when they disagree with
@@ -231,9 +231,10 @@ console.log(`  package.json and manifest.json agree (${pkgVersion})`);
 step('Building release artifacts');
 run('yarn', ['build', ...(willSign ? ['--sign'] : [])], { evenInDryRun: true });
 
-const zipPath = path.join(ROOT, 'release', `${PKG_NAME}-${version}.zip`);
-const firefoxZipPath = path.join(ROOT, 'release', `${PKG_NAME}-${version}-firefox.zip`);
-const crxPath = path.join(ROOT, 'release', `${PKG_NAME}-${version}.crx`);
+const releaseFiles = releaseFileNames(version);
+const zipPath = path.join(ROOT, 'release', releaseFiles.chromeZip);
+const firefoxZipPath = path.join(ROOT, 'release', releaseFiles.firefoxZip);
+const crxPath = path.join(ROOT, 'release', releaseFiles.chromeCrx);
 const assets = [];
 
 if (!DRY_RUN) {

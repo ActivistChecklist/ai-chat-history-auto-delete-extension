@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import {
   CWS_SCOPE,
+  crxZipPayload,
   TOKEN_URL,
   parseServiceAccountKey,
   buildServiceAccountJwt,
@@ -125,7 +126,7 @@ describe('createWebStoreClient', () => {
     const { impl, calls } = fakeFetch(jsonResponse({}), jsonResponse({}), jsonResponse({}));
     const client = createWebStoreClient({ publisherId: 'pub1', itemId: 'item1', accessToken: 'tok', fetch: impl });
     await client.fetchStatus();
-    await client.upload(Buffer.from('zip'));
+    await client.upload({ bytes: Buffer.from('crx'), fileName: 'pkg-1.1.1.crx' });
     await client.publish();
 
     expect(calls.map((c) => c.url)).toEqual([
@@ -135,7 +136,35 @@ describe('createWebStoreClient', () => {
     ]);
     for (const c of calls) expect(c.init.headers.Authorization).toBe('Bearer tok');
     expect(calls[1].init.method).toBe('POST');
-    expect(calls[1].init.headers['Content-Type']).toBe('application/zip');
+    expect(calls[1].init.headers['X-Goog-Upload-Protocol']).toBe('raw');
+    expect(calls[1].init.headers['X-Goog-Upload-File-Name']).toBe('pkg-1.1.1.crx');
+    expect(calls[1].init.body.toString()).toBe('crx');
+  });
+});
+
+describe('crxZipPayload', () => {
+  function crx({ magic = 'Cr24', formatVersion = 3, header = Buffer.from('signed-header'), zip = Buffer.from('PK-zip') } = {}) {
+    const prefix = Buffer.alloc(12);
+    prefix.write(magic, 0, 'ascii');
+    prefix.writeUInt32LE(formatVersion, 4);
+    prefix.writeUInt32LE(header.length, 8);
+    return Buffer.concat([prefix, header, zip]);
+  }
+
+  it('returns the zip after the signed header', () => {
+    expect(crxZipPayload(crx()).toString()).toBe('PK-zip');
+  });
+
+  it('rejects a file that is not a CRX', () => {
+    expect(() => crxZipPayload(Buffer.from('PK\u0003\u0004 a plain zip'))).toThrow(/Not a CRX/);
+  });
+
+  it('rejects other CRX format versions', () => {
+    expect(() => crxZipPayload(crx({ formatVersion: 2 }))).toThrow(/format version 2/);
+  });
+
+  it('rejects a header that runs past the end', () => {
+    expect(() => crxZipPayload(crx({ zip: Buffer.alloc(0) }))).toThrow(/past the end/);
   });
 });
 
@@ -167,20 +196,21 @@ describe('uploadAndPublish', () => {
     };
   }
   const opts = { sleep: async () => {}, pollMs: 0 };
+  const PKG = { bytes: Buffer.from('crx'), fileName: 'pkg.crx' };
 
   it('uploads, then submits for review', async () => {
     const client = fakeClient({
       status: { publishedItemRevisionStatus: revision('1.1.0', 'PUBLISHED') },
       upload: { uploadState: 'SUCCEEDED', crxVersion: '1.1.1' }
     });
-    const result = await uploadAndPublish(client, Buffer.from('zip'), '1.1.1', opts);
+    const result = await uploadAndPublish(client, PKG, '1.1.1', opts);
     expect(client.calls).toEqual(['fetchStatus', 'upload', 'publish']);
     expect(result.publish.state).toBe('PENDING_REVIEW');
   });
 
   it('refuses a version the store already has, before uploading', async () => {
     const client = fakeClient({ status: { submittedItemRevisionStatus: revision('1.1.1', 'PENDING_REVIEW') } });
-    await expect(uploadAndPublish(client, Buffer.from('zip'), '1.1.1', opts)).rejects.toThrow(/already has version 1\.1\.1/);
+    await expect(uploadAndPublish(client, PKG, '1.1.1', opts)).rejects.toThrow(/already has version 1\.1\.1/);
     expect(client.calls).toEqual(['fetchStatus']);
   });
 
@@ -189,7 +219,7 @@ describe('uploadAndPublish', () => {
       upload: { uploadState: 'IN_PROGRESS' },
       polls: [{ lastAsyncUploadState: 'IN_PROGRESS' }, { lastAsyncUploadState: 'SUCCEEDED' }]
     });
-    await uploadAndPublish(client, Buffer.from('zip'), '1.1.1', opts);
+    await uploadAndPublish(client, PKG, '1.1.1', opts);
     expect(client.calls).toEqual(['fetchStatus', 'upload', 'fetchStatus', 'fetchStatus', 'publish']);
   });
 
@@ -198,20 +228,20 @@ describe('uploadAndPublish', () => {
       upload: { uploadState: 'IN_PROGRESS' },
       polls: [{ lastAsyncUploadState: 'IN_PROGRESS' }, { lastAsyncUploadState: 'IN_PROGRESS' }]
     });
-    await expect(uploadAndPublish(client, Buffer.from('zip'), '1.1.1', { ...opts, maxPolls: 2 }))
+    await expect(uploadAndPublish(client, PKG, '1.1.1', { ...opts, maxPolls: 2 }))
       .rejects.toThrow(/still processing/);
     expect(client.calls).not.toContain('publish');
   });
 
   it('stops on a failed upload without submitting', async () => {
     const client = fakeClient({ upload: { uploadState: 'FAILED' } });
-    await expect(uploadAndPublish(client, Buffer.from('zip'), '1.1.1', opts)).rejects.toThrow(/did not succeed \(state: FAILED\)/);
+    await expect(uploadAndPublish(client, PKG, '1.1.1', opts)).rejects.toThrow(/did not succeed \(state: FAILED\)/);
     expect(client.calls).not.toContain('publish');
   });
 
   it('stops when the store reads a different version from the package', async () => {
     const client = fakeClient({ upload: { uploadState: 'SUCCEEDED', crxVersion: '1.1.0' } });
-    await expect(uploadAndPublish(client, Buffer.from('zip'), '1.1.1', opts)).rejects.toThrow(/read version 1\.1\.0/);
+    await expect(uploadAndPublish(client, PKG, '1.1.1', opts)).rejects.toThrow(/read version 1\.1\.0/);
     expect(client.calls).not.toContain('publish');
   });
 });

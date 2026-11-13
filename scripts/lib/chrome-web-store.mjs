@@ -95,10 +95,11 @@ export function createWebStoreClient({ publisherId, itemId, accessToken, fetch: 
   return {
     fetchStatus: () => request(fetchImpl, `${API_ROOT}/v2/${name}:fetchStatus`, { headers: auth },
       'Reading the item status'),
-    upload: (zip) => request(fetchImpl, `${API_ROOT}/upload/v2/${name}:upload`, {
+    /** Uploads a signed CRX, which a listing with verified uploads requires. */
+    upload: ({ bytes, fileName }) => request(fetchImpl, `${API_ROOT}/upload/v2/${name}:upload`, {
       method: 'POST',
-      headers: { ...auth, 'Content-Type': 'application/zip' },
-      body: zip
+      headers: { ...auth, 'X-Goog-Upload-Protocol': 'raw', 'X-Goog-Upload-File-Name': fileName },
+      body: bytes
     }, 'Uploading the package'),
     publish: () => request(fetchImpl, `${API_ROOT}/v2/${name}:publish`, {
       method: 'POST',
@@ -140,10 +141,27 @@ const hasState = (state, word) => typeof state === 'string' && state.includes(wo
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Uploads the zip, waits for the store to process it, checks the version it read, then
- * submits it for review. Refuses a version the store already has, before uploading.
+ * The zip archive inside a CRX3 file. A CRX3 starts with "Cr24", the format version (3)
+ * and the signed header's length, as little-endian 32-bit integers, then that header,
+ * then the zip.
  */
-export async function uploadAndPublish(client, zip, version, {
+export function crxZipPayload(crx) {
+  if (crx.length < 12 || crx.toString('ascii', 0, 4) !== 'Cr24') {
+    throw new Error('Not a CRX file (it does not start with "Cr24").');
+  }
+  const formatVersion = crx.readUInt32LE(4);
+  if (formatVersion !== 3) throw new Error(`Unsupported CRX format version ${formatVersion}; expected 3.`);
+  const start = 12 + crx.readUInt32LE(8);
+  if (start >= crx.length) throw new Error('The CRX header runs past the end of the file.');
+  return crx.subarray(start);
+}
+
+/**
+ * Uploads the package, waits for the store to process it, checks the version it read,
+ * then submits it for review. Refuses a version the store already has, before uploading.
+ * @param {{bytes: Buffer, fileName: string}} pkg
+ */
+export async function uploadAndPublish(client, pkg, version, {
   sleep = defaultSleep,
   pollMs = 3000,
   maxPolls = 40,
@@ -158,7 +176,7 @@ export async function uploadAndPublish(client, zip, version, {
   }
 
   log('uploading');
-  const upload = await client.upload(zip);
+  const upload = await client.upload(pkg);
   let state = upload.uploadState;
   for (let polls = 0; hasState(state, 'IN_PROGRESS'); polls++) {
     if (polls >= maxPolls) {

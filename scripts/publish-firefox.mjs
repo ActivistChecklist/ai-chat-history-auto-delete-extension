@@ -26,10 +26,10 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { loadEnvFileWithReport, formatEnvConflict } from './lib/env-file.mjs';
 import { readOpSecret } from './lib/op-read.mjs';
+import { releaseFileNames } from './lib/release-files.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const PKG_NAME = 'ai-chat-history-auto-delete';
 const DIST_FIREFOX = path.join(ROOT, 'dist-firefox');
 const RELEASE = path.join(ROOT, 'release');
 const METADATA = path.join(ROOT, 'store', 'amo-metadata.json');
@@ -120,7 +120,7 @@ run('yarn', ['-s', 'web-ext', 'lint', '--source-dir', DIST_FIREFOX]);
 // AMO asks for human-readable source when a package holds generated files (here, the
 // minified Tailwind CSS). The tagged commit is exactly that.
 step('Archiving source for AMO reviewers');
-const sourceZip = path.join(RELEASE, `${PKG_NAME}-${version}-source.zip`);
+const sourceZip = path.join(RELEASE, releaseFileNames(version).firefoxSource);
 fs.mkdirSync(RELEASE, { recursive: true });
 run('git', ['archive', '--format=zip', '-o', sourceZip, 'HEAD']);
 console.log(`  ${path.relative(ROOT, sourceZip)}`);

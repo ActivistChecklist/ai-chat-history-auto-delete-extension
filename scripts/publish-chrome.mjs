@@ -1,15 +1,16 @@
 /**
- * Submits the Chrome build to the Chrome Web Store through the Web Store API (v2).
+ * Submits the release's signed CRX to the Chrome Web Store through the Web Store API (v2).
  *
  * Usage:
  *   yarn publish:chrome            # upload the released version and submit it for review
- *   yarn publish:chrome --dry-run  # build and print what would be uploaded; sends nothing
+ *   yarn publish:chrome --dry-run  # check the package and print what would be uploaded
  *   yarn publish:chrome --status   # show what the store has published and in review
  *
- * Run it after `yarn release`. The store must get exactly the tagged build, so the tag
- * v<manifest version> must exist, the tree must be clean, and every file in the built
- * package must match that tag byte for byte. Later commits that only touch tooling or
- * docs are fine.
+ * Run it after `yarn release`. This listing uses verified uploads, so the store only
+ * accepts a CRX signed with the extension's private key, which `yarn release` makes. The
+ * script uploads that file unchanged after checking that every file inside it matches
+ * the tag v<manifest version> byte for byte. Commits after the release that only touch
+ * tooling or docs are fine, and the signing key is not needed again.
  *
  * The API only updates an existing item. The store listing (text, screenshots, privacy
  * answers) is still edited in the Developer Dashboard.
@@ -17,16 +18,18 @@
  * Auth is a Google Cloud service account that has been added to the publisher (see the
  * README). Its JSON key stays in 1Password: .env holds the secret reference
  * (OP_CWS_SERVICE_ACCOUNT_REF) and the publisher ID (CWS_PUBLISHER_ID). The key is read
- * only after the build and lint pass, and is never printed or passed on a command line.
+ * only after the package checks pass, and is never printed or passed on a command line.
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { loadEnvFileWithReport, formatEnvConflict } from './lib/env-file.mjs';
 import { readOpSecret } from './lib/op-read.mjs';
 import {
+  crxZipPayload,
   parseServiceAccountKey,
   getAccessToken,
   createWebStoreClient,
@@ -34,11 +37,10 @@ import {
   uploadAndPublish
 } from './lib/chrome-web-store.mjs';
 import { listFiles, filesChangedSinceTag } from './lib/tagged-build.mjs';
+import { releaseFileNames } from './lib/release-files.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const DIST = path.join(ROOT, 'dist');
-const PKG_NAME = 'ai-chat-history-auto-delete';
 
 /** The listing's ID in the store (its URL ends with it). Fixed for the life of the listing. */
 const ITEM_ID = 'ipmoefogkkpbgpbniklknonnmbmcbnpk';
@@ -59,15 +61,10 @@ function step(msg) {
   console.log(`\n\x1b[1m▸ ${msg}\x1b[0m`);
 }
 
-function run(cmd, args) {
-  const r = spawnSync(cmd, args, { cwd: ROOT, stdio: 'inherit' });
-  if (r.error) throw r.error;
-  if (r.status !== 0) die(`\`${cmd} ${args.join(' ')}\` exited with status ${r.status}`);
-}
-
-function capture(cmd, args) {
-  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8' });
-  return (r.stdout || '').trim();
+/** In a dry run a problem is reported and the run continues; otherwise it stops. */
+function problem(msg) {
+  if (!DRY_RUN) die(msg);
+  console.log(`  ⚠ ${msg} (allowed in dry-run)`);
 }
 
 /** A file's bytes at a git revision, or null when it has no such file. */
@@ -104,6 +101,29 @@ async function connect() {
   return createWebStoreClient({ publisherId: process.env.CWS_PUBLISHER_ID, itemId: ITEM_ID, accessToken });
 }
 
+/** Paths inside the CRX whose bytes differ from the tag (or that the tag lacks). */
+function crxFilesChangedSinceTag(crx, tag) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cws-crx-'));
+  try {
+    const zipPath = path.join(tmp, 'payload.zip');
+    const filesDir = path.join(tmp, 'files');
+    fs.writeFileSync(zipPath, crxZipPayload(crx));
+    const unzip = spawnSync('unzip', ['-q', zipPath, '-d', filesDir], { encoding: 'utf8' });
+    if (unzip.error || unzip.status !== 0) {
+      die(`Could not unpack the CRX: ${unzip.error?.message || unzip.stderr.trim()}`);
+    }
+    const files = listFiles(filesDir);
+    const changed = filesChangedSinceTag(
+      files,
+      (p) => fs.readFileSync(path.join(filesDir, p)),
+      (p) => readAtRevision(tag, p)
+    );
+    return { files, changed };
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   if (STATUS_ONLY) {
     step(`Chrome Web Store status for ${ITEM_ID}`);
@@ -120,42 +140,36 @@ async function main() {
   console.log(`  version: ${version}`);
   console.log(`  item: ${ITEM_ID}`);
 
-  const problems = [];
-  if (capture('git', ['status', '--porcelain'])) {
-    problems.push('Working tree is not clean; the uploaded package would not match the release.');
-  }
-  const tagExists = !!capture('git', ['tag', '--list', tag]);
-  if (!tagExists) {
-    problems.push(`There is no tag ${tag}. Run \`yarn release\` first.`);
-  }
   const missing = missingConfig();
-  if (missing.length) problems.push(`Set ${missing.join(' and ')} in .env.\n${SETUP_HELP}`);
-  if (problems.length && !DRY_RUN) die(problems.join('\n  '));
-  for (const p of problems) console.log(`  ⚠ ${p} (allowed in dry-run)`);
-  if (!missing.length) console.log(`  publisher: ${process.env.CWS_PUBLISHER_ID}`);
+  if (missing.length) problem(`Set ${missing.join(' and ')} in .env.\n${SETUP_HELP}`);
+  else console.log(`  publisher: ${process.env.CWS_PUBLISHER_ID}`);
 
-  // ─── Build ─────────────────────────────────────────────────────────────────
+  // ─── Package ───────────────────────────────────────────────────────────────
 
-  step('Building the Chrome package');
-  run('node', ['scripts/build-extension.mjs', '--target', 'chrome']);
-  const zipPath = path.join(ROOT, 'release', `${PKG_NAME}-${version}.zip`);
-  if (!fs.existsSync(zipPath)) die(`Expected zip not found: ${zipPath}`);
-  const sizeKb = Math.round(fs.statSync(zipPath).size / 1024);
-
-  if (tagExists) {
-    const built = listFiles(DIST);
-    const changed = filesChangedSinceTag(
-      built,
-      (p) => fs.readFileSync(path.join(DIST, p)),
-      (p) => readAtRevision(tag, p)
+  step('Checking the signed package');
+  const crxName = releaseFileNames(version).chromeCrx;
+  const crxPath = path.join(ROOT, 'release', crxName);
+  if (!fs.existsSync(crxPath)) {
+    die(
+      `No signed package at release/${crxName}.\n` +
+      '  The store only accepts a CRX signed with the extension\'s key. `yarn release` makes one\n' +
+      '  (unless run with --no-sign), and the GitHub release has it attached.'
     );
+  }
+  const crx = fs.readFileSync(crxPath);
+  console.log(`  ${path.relative(ROOT, crxPath)} (${Math.round(crx.length / 1024)} KB)`);
+
+  if (!readAtRevision(tag, 'manifest.json')) {
+    problem(`There is no tag ${tag}. Run \`yarn release\` first.`);
+  } else {
+    const { files, changed } = crxFilesChangedSinceTag(crx, tag);
     if (changed.length) {
-      const msg = `The package differs from ${tag} in:\n    ${changed.join('\n    ')}\n` +
-        '  Release those changes first, so the store gets a tagged build.';
-      if (!DRY_RUN) die(msg);
-      console.log(`  ⚠ ${msg} (allowed in dry-run)`);
+      problem(
+        `The CRX differs from ${tag} in:\n    ${changed.join('\n    ')}\n` +
+        '  Publish only a package made by `yarn release` for this version.'
+      );
     } else {
-      console.log(`  all ${built.length} files match ${tag}`);
+      console.log(`  all ${files.length} files inside match ${tag}`);
     }
   }
 
@@ -163,13 +177,13 @@ async function main() {
 
   step(`Submitting ${version} to the Chrome Web Store`);
   if (DRY_RUN) {
-    console.log(`  [dry-run] would upload ${path.relative(ROOT, zipPath)} (${sizeKb} KB) and submit it for review`);
+    console.log(`  [dry-run] would upload ${crxName} and submit it for review`);
     console.log('\n✓ Dry run complete. Nothing was read from 1Password or uploaded.');
     return;
   }
 
   const client = await connect();
-  const { before, publish } = await uploadAndPublish(client, fs.readFileSync(zipPath), version, {
+  const { before, publish } = await uploadAndPublish(client, { bytes: crx, fileName: crxName }, version, {
     log: (phase) => console.log(`  ${phase}…`)
   });
   for (const line of summarizeStatus(before)) console.log(`  before: ${line}`);

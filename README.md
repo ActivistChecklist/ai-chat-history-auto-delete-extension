@@ -56,7 +56,7 @@ yarn build
 ```
 
 - Runs **Tailwind** (`build:css`) so `src/styles/auto-delete.css` is minified, then copies only listed runtime files into **`dist/`** (Chrome) and **`dist-firefox/`** (Firefox).
-- Writes **`release/ai-chat-history-auto-delete-<version>.zip`** for the Chrome Web Store and **`release/ai-chat-history-auto-delete-<version>-firefox.zip`** for Firefox Add-ons (version from `manifest.json`).
+- Writes **`release/ai-chat-history-auto-delete-<version>-chrome.zip`** for Chrome and **`release/ai-chat-history-auto-delete-<version>-firefox.zip`** for Firefox Add-ons (version from `manifest.json`). A signed build adds **`-chrome.crx`**, which is what the Chrome Web Store takes. Releases up to 1.1.1 used the older names without `-chrome`.
 
 Both builds ship the same files. Only `manifest.json` differs: the Firefox one is generated from the Chrome one by `scripts/lib/firefox-manifest.mjs`, which swaps the service worker for a background script, uses `options_ui`, and adds the Firefox add-on ID and "collects no data" declaration that addons.mozilla.org (AMO) requires.
 
@@ -125,20 +125,20 @@ Flags:
 - `yarn release:dry` — print every step and change nothing. **Run this first.**
 - `yarn release --release-as minor` — override the inferred bump.
 - `yarn release --first-release` — tag the *current* version as a baseline without bumping (needed once, since the repo has no tags yet).
-- `yarn release --no-sign` — skip the CRX; the Web Store only needs the zip.
+- `yarn release --no-sign` — skip the CRX. The Web Store won't accept that release, because this listing only takes a signed CRX.
 - `yarn release --yes` — skip the confirmation prompt.
 
 Signing is on by default and the release **fails** if the key is missing or unresolvable — shipping unsigned should be a deliberate choice (`--no-sign`), not the side effect of an unset variable.
 
 ### Publishing to the Chrome Web Store
 
-Run this after `yarn release`. It checks that every file it uploads matches the release tag, so commits after the release that only touch tooling or docs don't get in the way:
+Run this after `yarn release`:
 
 ```bash
 yarn publish:chrome
 ```
 
-It rebuilds the Chrome zip, uploads it with the [Chrome Web Store API](https://developer.chrome.com/docs/webstore/using-api), and submits it for review. The new version goes live when review passes. It refuses a version the store already has. `yarn publish:chrome:dry` does everything except reading the key and uploading, and `yarn publish:chrome --status` shows what the store has published and in review.
+This listing uses verified uploads, so the store only accepts a CRX signed with the extension's key. That's why every release signs one. The script takes the release's `.crx`, checks that every file inside it matches the release tag, uploads it with the [Chrome Web Store API](https://developer.chrome.com/docs/webstore/using-api), and submits it for review. The signing key isn't needed again, and commits after the release that only touch tooling or docs don't get in the way. The new version goes live when review passes. It refuses a version the store already has. `yarn publish:chrome:dry` does everything except reading the key and uploading, and `yarn publish:chrome --status` shows what the store has published and in review.
 
 The API only updates the existing listing. Edit the listing text, screenshots and privacy answers in the [Developer Dashboard](https://chrome.google.com/webstore/devconsole).
 

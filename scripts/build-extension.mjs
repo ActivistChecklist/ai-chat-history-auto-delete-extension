@@ -11,11 +11,11 @@
  *
  * Usage:
  *   yarn build                     # CSS + dist/ + dist-firefox/ + release/*.zip
- *   yarn build --target chrome     # dist/ + release/<name>-<version>.zip
+ *   yarn build --target chrome     # dist/ + release/<name>-<version>-chrome.zip
  *   yarn build --target firefox    # dist-firefox/ + release/<name>-<version>-firefox.zip
  *   yarn build --no-zip            # build dirs only
  *   yarn build --skip-css
- *   yarn build --sign              # also sign the Chrome build into a .crx
+ *   yarn build --sign              # also sign the Chrome build into <name>-<version>-chrome.crx
  */
 
 import fs from 'node:fs';
@@ -29,6 +29,7 @@ import { assertChromeVersion } from './lib/chrome-version.mjs';
 import { toFirefoxManifest, GECKO_ID } from './lib/firefox-manifest.mjs';
 import { loadEnvFileWithReport } from './lib/env-file.mjs';
 import { readOpSecret } from './lib/op-read.mjs';
+import { releaseFileNames } from './lib/release-files.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -43,12 +44,11 @@ for (const c of ENV_CONFLICTS) {
 const DIST = path.join(ROOT, 'dist');
 const DIST_FIREFOX = path.join(ROOT, 'dist-firefox');
 const RELEASE = path.join(ROOT, 'release');
-const PKG_NAME = 'ai-chat-history-auto-delete';
 
-/** Per-browser output. Chrome keeps the original dist/ and zip names. */
+/** Per-browser output: build folder, and which release file name the zip gets. */
 const TARGETS = {
-  chrome: { dist: DIST, zipSuffix: '' },
-  firefox: { dist: DIST_FIREFOX, zipSuffix: '-firefox' }
+  chrome: { dist: DIST, zipName: 'chromeZip' },
+  firefox: { dist: DIST_FIREFOX, zipName: 'firefoxZip' }
 };
 
 /** Every file the extension loads at runtime — update when you add modules or static assets. */
@@ -184,7 +184,7 @@ async function signExtension(version) {
     }
     console.log('CRX magic bytes verified (Cr24 ✓)');
 
-    const crxName = `${PKG_NAME}-${safeVersionString(version)}.crx`;
+    const crxName = releaseFileNames(version).chromeCrx;
     const crxDest = path.join(RELEASE, crxName);
     fs.mkdirSync(RELEASE, { recursive: true });
     if (fs.existsSync(crxDest)) fs.unlinkSync(crxDest);
@@ -294,12 +294,7 @@ function writeFirefoxManifest(distDir) {
   fs.writeFileSync(manifestPath, `${JSON.stringify(toFirefoxManifest(chromeManifest), null, 2)}\n`);
 }
 
-function safeVersionString(version) {
-  return String(version).replace(/[^0-9a-z._-]+/gi, '-');
-}
-
-function zipDist(version, distDir, zipSuffix) {
-  const zipName = `${PKG_NAME}-${safeVersionString(version)}${zipSuffix}.zip`;
+function zipDist(distDir, zipName) {
   const zipPath = path.join(RELEASE, zipName);
   fs.mkdirSync(RELEASE, { recursive: true });
   if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
@@ -319,7 +314,7 @@ function zipDist(version, distDir, zipSuffix) {
 }
 
 async function buildTarget(target, { noZip }) {
-  const { dist, zipSuffix } = TARGETS[target];
+  const { dist, zipName } = TARGETS[target];
   fs.rmSync(dist, { recursive: true, force: true });
   fs.mkdirSync(dist, { recursive: true });
 
@@ -337,7 +332,7 @@ async function buildTarget(target, { noZip }) {
   console.log(`${path.relative(ROOT, dist)}/ ready (${target}): ${loadHint}\n  ${dist}`);
 
   if (!noZip) {
-    await zipDist(manifest.version, dist, zipSuffix);
+    await zipDist(dist, releaseFileNames(manifest.version)[zipName]);
   }
   return manifest;
 }
