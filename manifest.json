@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Chat History Auto-Delete",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Automatically delete old Claude chats. You pick how far back (default: 30 days). Runs in your browser — nothing leaves your device.",
   "permissions": [
     "storage",

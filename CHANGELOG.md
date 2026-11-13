@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.1.1](https://github.com/ActivistChecklist/ai-chat-history-auto-delete-extension/compare/v1.1.0...v1.1.1) (2026-11-13)
+
+### Features
+
+* Add Firefox build and AMO publishing ([db83d62](https://github.com/ActivistChecklist/ai-chat-history-auto-delete-extension/commit/db83d62d7515748c4e763b141b6e1b1d27ebfafe))
+
+### Bug Fixes
+
+* Build extension UI without innerHTML for Firefox review ([785e0f1](https://github.com/ActivistChecklist/ai-chat-history-auto-delete-extension/commit/785e0f1573ca2cd894c4a1bc1650438f726d0158))
+* Point changelog links at github.com instead of the SSH alias ([7260135](https://github.com/ActivistChecklist/ai-chat-history-auto-delete-extension/commit/7260135dad85245f54ee5e2b6a3b366361fdd791))
 ## [1.1.0](https://github.com/ActivistChecklist/ai-chat-history-auto-delete-extension/compare/v1.0.0...v1.1.0) (2026-08-27)
 
 ### Features
