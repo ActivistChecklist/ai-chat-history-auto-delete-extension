@@ -37,7 +37,7 @@ If no **claude.ai** tab is open, the extension does **nothing**—it can’t see
 Nothing about you or your chats is sent to us, and the extension only talks to claude.ai. Everything it saves stays in the browser's `storage.local` extension storage:
 
 - **Settings**, such as the number of days, the schedule, and whether to skip starred chats.
-- **Deletion counts.** The activity log shows how many chats were deleted on each run and when, for the last 30 days (not which ones). You can turn it off or clear it in Settings. The most recent run's count and time are kept either way so the sidebar can show them.
+- **Deletion counts.** The activity log shows how many chats were deleted on each run and when, for the last 30 days (not which ones). Older entries can stay in storage until the next time it deletes chats. You can turn the log off or clear it in Settings (either one deletes it right away). The most recent run's count and time are kept either way so the sidebar can show them.
 - **Your Claude organization ID**, so the next run can try that organization first.
 - **Chats waiting for approval.** Run now (and scheduled runs, if you have it ask before deleting) saves the titles, IDs and last-updated dates of the chats it found, so it can show you the list. The list stays until you confirm the deletion or a later run replaces it. Snoozing or closing the window doesn't clear it.
 
