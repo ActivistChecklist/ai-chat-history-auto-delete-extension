@@ -1,42 +1,48 @@
-# Privacy Policy — Claude Chat Auto-Delete Extension
+# Privacy Policy: AI Chat History Auto-Delete
 
 **Canonical public copy (HTTPS, for store listings):** [activistchecklist.github.io/ai-chat-history-auto-delete-extension/privacy.html](https://activistchecklist.github.io/ai-chat-history-auto-delete-extension/privacy.html)
 
-**Effective Date:** March 19, 2026
+AI Chat History Auto-Delete, a browser extension for Chrome and Firefox
+
+**Effective date:** November 23, 2026
 
 ## The short version
 
-This extension does not collect, store, or transmit any of your data. Everything it does happens entirely on your machine. We have no servers. We have no analytics. We have no interest in your data.
+This extension runs in your browser and only talks to claude.ai, using your login there to find and delete your old chats. Nothing about you or your chats is sent to us. We don't run any servers or analytics for it, so we don't have anything to turn over if we get a legal demand.
 
 ## What the extension does
 
-This extension automatically deletes your Claude (claude.ai) conversations that are older than a number of days you choose. It runs locally in your browser and interacts only with claude.ai on your behalf.
+It deletes your Claude (claude.ai) chats once they haven't been updated for a number of days you choose (30 by default). It can run on a schedule you set or when you click Run now, but only while you have claude.ai open in a tab.
 
-## Data collection
+## What it saves in your browser
 
-This extension collects **no data whatsoever**. Specifically:
+The extension saves a few things in your browser's built-in extension storage, on your computer:
 
-- No personal information is collected, stored, or transmitted
-- No browsing history or activity is tracked
-- No analytics, telemetry, or crash reports are sent anywhere
-- No cookies are set by the extension
-- No data is sent to us or to any third party
-- Nothing is used to train AI models (because nothing is collected)
+- Your settings (such as the number of days, the schedule, and whether to skip starred chats)
+- How many chats were deleted on each run and when (not which ones). The log shows the last 30 days, and you can turn it off or clear it in the settings. Even with the log off, it keeps the date and count from the most recent run so it can show them on claude.ai.
+- The ID of your Claude organization, so it can check that one first on the next run (if your account has more than one)
+- The list of chats waiting for your approval (their titles, IDs and last-updated dates). It saves this every time you click Run now, and on scheduled runs if you have it ask before deleting. The list stays until you approve the deletion or a later run replaces it (snoozing or closing the window doesn't clear it).
 
-Your settings (such as the number of days before deletion) are stored locally in your browser using its built-in extension storage. This data never leaves your machine.
+None of this is sent to us or anyone else, other than the chat and organization IDs it sends back to claude.ai to delete your chats. Uninstalling the extension deletes all of it.
 
 ## Third parties
 
-We do not share any data with third parties because we do not have any of your data to share. The extension communicates only with claude.ai in order to perform the chat deletion you've configured.
+The extension only connects to claude.ai, to list your chats and delete the ones past your limit. (Anthropic, the company behind Claude, can see those requests like anything else you do on claude.ai.)
 
 ## Permissions
 
-The extension requests only the minimum browser permissions needed to function. These permissions are used solely to interact with claude.ai and manage your auto-deletion preferences locally.
+The extension asks your browser for these permissions:
+
+- Access to claude.ai, so it can list and delete your chats and show its status on the page
+- Storage, for the settings and records listed above
+- Alarms, so it can run on your schedule
+- Tabs and scripting, so it can find your open claude.ai tab and send its requests (listing and deleting chats) from there. (Your browser may describe the tabs permission as reading your browsing history, but the extension only looks for claude.ai tabs.)
+- Notifications, so it can let you know when chats are waiting for your approval (the notification only shows how many)
 
 ## Changes to this policy
 
-If this policy changes, the updated version will be posted here and the effective date above will be updated.
+If this policy changes, we'll post the updated version here and change the effective date above.
 
 ## Contact
 
-If you have questions about this privacy policy, you can reach me at <contact@activistchecklist.org>.
+If you have questions about this privacy policy, you can email us at <contact@activistchecklist.org>. If you'd like, you can also review the code on [GitHub](https://github.com/ActivistChecklist/ai-chat-history-auto-delete-extension).
