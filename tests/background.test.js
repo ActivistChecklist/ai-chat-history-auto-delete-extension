@@ -343,6 +343,44 @@ describe('alarm handler', () => {
     expect(chrome.tabs.query).not.toHaveBeenCalled();
   });
 
+  it('clears an earlier approval list after deleting without asking', async () => {
+    getStore().settings = { runFrequency: 'daily', autoConfirm: true };
+    getStore().last_run = { timestamp: 0, deleted: 0 };
+    getStore().pending_confirm = {
+      count: 1,
+      chatIds: ['old-chat'],
+      chats: [{ id: 'old-chat', name: 'Old chat' }],
+      timestamp: 0
+    };
+    const tab = { id: 42, url: 'https://claude.ai/new' };
+    chrome.tabs.query.mockResolvedValue([tab]);
+    chrome.tabs.get.mockResolvedValue(tab);
+    chrome.scripting.executeScript.mockImplementation(async ({ args: [url] }) => {
+      if (url === 'https://claude.ai/api/organizations') {
+        return [{ result: { status: 200, ok: true, body: [{ uuid: 'org-1' }] } }];
+      }
+      if (url.includes('/delete_many')) {
+        return [{ result: { status: 200, ok: true, body: { deleted: ['old-chat'] } } }];
+      }
+      return [{
+        result: {
+          status: 200,
+          ok: true,
+          body: [{ uuid: 'old-chat', name: 'Old chat', updated_at: '2020-01-01T00:00:00Z' }]
+        }
+      }];
+    });
+    chrome.action.setBadgeText.mockClear();
+
+    await alarmHandler({ name: 'auto-delete-check' });
+
+    const deleteCall = chrome.scripting.executeScript.mock.calls
+      .find(([opts]) => opts.args[0].includes('/delete_many'));
+    expect(deleteCall).toBeDefined();
+    expect(getStore().pending_confirm).toBeUndefined();
+    expect(chrome.action.setBadgeText).toHaveBeenCalledWith({ text: '' });
+  });
+
   it('skips when pending deletion is snoozed', async () => {
     getStore().settings = { runFrequency: 'daily' };
     getStore().last_run = { timestamp: 0, deleted: 0 };
