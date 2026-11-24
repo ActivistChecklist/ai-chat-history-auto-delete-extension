@@ -17,7 +17,7 @@ Use the privacy URL in the [Chrome Web Store Developer Dashboard](https://chrome
 2. **Build and deployment** → **Source**: *Deploy from a branch*.
 3. **Branch**: `main` (or your default), folder **`/docs`**, Save.
 
-The site uses [Tailwind CSS](https://tailwindcss.com/) via the Play CDN in each HTML file (no separate build step for `docs/`).
+Both pages share one stylesheet, `site.css`, with colors taken from the extension's settings page (no build step for `docs/`). `icon128.png` is a copy of `icons/icon128.png`.
 
 ## Store links
 
