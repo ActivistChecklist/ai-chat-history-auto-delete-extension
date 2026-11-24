@@ -50,14 +50,13 @@
       <p>The extension saves a few things in your browser's built-in extension storage, on your computer:</p>
       <ul>
         <li>Your settings (such as the number of days, the schedule, and whether to skip starred chats)</li>
-        <li>How many chats were deleted on each run and when (not which ones). The log shows the last 30 days, and
-          you can turn it off or clear it in the settings. Even with the log off, it keeps the date and count from the
+        <li>How many chats were deleted on each run and when (not which ones). The log shows the last 30 days, but older entries can stay in storage until the next time it deletes chats. You can turn the log off or clear it in the settings (either one deletes it right away). Even with the log off, it keeps the date and count from the
           most recent run so it can show them on claude.ai.</li>
         <li>The ID of your Claude organization, so it can check that one first on the next run (if your account has
           more than one)</li>
         <li>The list of chats waiting for your approval (their titles, IDs and last-updated dates). It saves this
           every time you click Run now, and on scheduled runs if you have it ask before deleting. The list stays until
-          you approve the deletion or a later run replaces it (snoozing or closing the window doesn't clear it).</li>
+          you approve the deletion or a later run replaces or clears it (snoozing or closing the window doesn't clear it).</li>
       </ul>
       <p>
         None of this is sent to us or anyone else, other than the chat and organization IDs it sends back to claude.ai

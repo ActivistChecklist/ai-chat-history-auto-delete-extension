@@ -386,6 +386,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         if (settings.autoConfirm) {
           const deleted = await executeDeletion(tabId, chatIds);
+          await clearPendingConfirm();
+          setBadge(0);
           return { deleted };
         }
         await setPendingConfirm({
@@ -538,6 +540,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
         }
         if (settings.autoConfirm) {
           const deleted = await executeDeletion(tabId, chatIds);
+          // A list saved by an earlier Run now would otherwise keep the titles of chats just deleted.
+          await clearPendingConfirm();
+          setBadge(0);
           log('Auto-delete completed:', deleted, 'chats');
         } else {
           await setPendingConfirm({

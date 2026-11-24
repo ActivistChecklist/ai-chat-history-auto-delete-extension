@@ -20,7 +20,7 @@ Made by [Activist Checklist](https://activistchecklist.org/).
 - **Run on a schedule or not** — Once a day, once a week, once a month, or **never automatically** until you click Run. Out of the box it stays **manual-only** until you finish setup or change it.
 - **“Run now”** — Kick off a delete pass whenever you want from Settings (or from the bar on claude.ai when something needs you).
 - **Bar on claude.ai** — When a run is happening, just finished, or chats are waiting for you to confirm, you get a small top bar on the page. Dismiss it when you’re done reading it.
-- **No list of what got deleted** — You might see a number (e.g. how many were removed last time). It doesn’t save chat names or links.
+- **No list of what got deleted:** You might see a number (such as how many were removed last time). Once chats are deleted, it doesn't keep their names or links. (While chats are waiting for you to approve a deletion, it keeps their titles and IDs so it can show you the list.)
 
 ## Usage
 
@@ -32,15 +32,16 @@ Made by [Activist Checklist](https://activistchecklist.org/).
 
 If no **claude.ai** tab is open, the extension does **nothing**—it can’t see your session. When you **do** have a tab open and a run happens (scheduled or **Run now**), it deletes **every chat that is older than X days** based on the number you set—including chats that “became” older than X while you didn’t have a tab open.
 
-## Security — What we don't store
+## Security: what we store
 
-No data ever leaves your computer. We don't record anything about the deleted chats except the total number deleted each time the extension runs.
+Nothing about you or your chats is sent to us, and the extension only talks to claude.ai. Everything it saves stays in the browser's `storage.local` extension storage:
 
-We do NOT store:
+- **Settings**, such as the number of days, the schedule, and whether to skip starred chats.
+- **Deletion counts.** The activity log shows how many chats were deleted on each run and when, for the last 30 days (not which ones). Older entries can stay in storage until the next time it deletes chats. You can turn the log off or clear it in Settings (either one deletes it right away). The most recent run's count and time are kept either way so the sidebar can show them.
+- **Your Claude organization ID**, so the next run can try that organization first.
+- **Chats waiting for approval.** Run now (and scheduled runs, if you have it ask before deleting) saves the titles, IDs and last-updated dates of the chats it found, so it can show you the list. The list stays until you confirm the deletion or a later run replaces or clears it. Snoozing or closing the window doesn't clear it.
 
-- **Deleted chat IDs** — Never stored. Used only in memory during the API call to delete, then discarded.
-- **Deleted chat names/titles** — Never stored. The activity log records only how many chats were deleted.
-- **No external transmission** — All storage is local (the browser's `storage.local` extension storage). Nothing is sent to us or any third party.
+None of this data is sent anywhere off your machine, other than the chat and organization IDs it sends back to claude.ai to delete your chats. Once chats are deleted, the extension doesn't keep their IDs or titles. The activity log only records how many.
 
 **Privacy policy:** [PRIVACY.md](PRIVACY.md) (source) · [Web version](https://activistchecklist.github.io/ai-chat-history-auto-delete-extension/privacy.html)
 
